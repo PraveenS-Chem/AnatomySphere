@@ -1566,14 +1566,14 @@ body.pmode #edu-bottom-sheet { display: none !important }
 <!-- Hidden from returning users via sessionStorage flag -->
 <div id="intro-screen">
   <div class="intro-glow"></div>
-  <div class="intro-logo">CS</div>
+  <div class="intro-logo">AS</div>
   <div class="intro-title">AnatomySphere</div>
   <div class="intro-sub">Free 3D anatomy viewer for NEET &amp; Nursing — Search any organ instantly</div>
   <div class="intro-bullets">
     <div class="intro-bullet"><span>🫀</span> Interactive 3D organs</div>
-    <div class="intro-bullet"><span>🧬</span> 2D Structures</div>
+    <div class="intro-bullet"><span>🧬</span> 2D Diagrams</div>
     <div class="intro-bullet"><span>📊</span> Organ properties</div>
-    <div class="intro-bullet"><span>🎯</span> NEET &amp; JEE focused</div>
+    <div class="intro-bullet"><span>🎯</span> NEET &amp; Nursing focused</div>
   </div>
   <div class="intro-btns">
     <button class="intro-btn-primary" onclick="enterApp(false)">Start Exploring →</button>
@@ -1590,7 +1590,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <button class="intro-feat-card" onclick="enterApp(false);setTimeout(()=>showcasePick('dige-kidney'),1600)"><span>वृक्क</span>Kidneys</button>
     </div>
   </div>
-  <div class="intro-badge">FREE FOR ALL STUDENTS · SEARCH ANY MOLECULE · NCI CACTUS</div>
+  <div class="intro-badge">FREE FOR ALL STUDENTS · SEARCH ANY ORGAN · NEET &amp; NURSING</div>
   <!-- Feature 7: Institutional badge -->
   <div class="intro-inst">Institution-ready interactive STEM visualization platform</div>
 </div>
@@ -1626,7 +1626,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
 
   <div class="dtabs">
     <button class="dtab on"  id="d3d"    onclick="setMode('3d')">3D Model</button>
-    <button class="dtab"     id="d2d"    onclick="setMode('2d')">2D Structure</button>
+    <button class="dtab"     id="d2d"    onclick="setMode('2d')">2D Diagram</button>
     <button class="dtab"     id="dpr"    onclick="setMode('props')">Properties</button>
     <button class="dtab"     id="dqz"    onclick="setMode('quiz')" style="color:var(--org);border-color:rgba(255,107,53,.25)">⚡ Quiz</button>
   </div>
@@ -1664,13 +1664,11 @@ body.pmode #edu-bottom-sheet { display: none !important }
     <div class="ss">
       <div class="sl">Chapter</div>
       <div class="ctbs" id="ctbs">
-        <button class="ctb on" data-cat="skeletal"       onclick="pickCat('skeletal',this)">Skeletal</button>
-        <button class="ctb"    data-cat="muscular"       onclick="pickCat('muscular',this)">Muscular</button>
-        <button class="ctb"    data-cat="nervous"        onclick="pickCat('nervous',this)">Nervous</button>
-        <button class="ctb"    data-cat="cardiovascular" onclick="pickCat('cardiovascular',this)">Cardiovascular</button>
-        <button class="ctb"    data-cat="respiratory"    onclick="pickCat('respiratory',this)">Respiratory</button>
-        <button class="ctb"    data-cat="digestive"      onclick="pickCat('digestive',this)">Digestive</button>
-        <button class="ctb"    data-cat="urinary"        onclick="pickCat('urinary',this)">Urinary</button>
+        <button class="ctb on" data-cat="circulatory" onclick="pickCat('circulatory',this)">Circulatory</button>
+        <button class="ctb"    data-cat="nervous"   onclick="pickCat('organic',this)">Nervous</button>
+        <button class="ctb"    data-cat="excretory"  onclick="pickCat('excretory',this)">Excretory</button>
+        <button class="ctb"    data-cat="digestive"    onclick="pickCat('digestive',this)">Digestive</button>
+        <button class="ctb"    data-cat="respiratory" onclick="pickCat('respiratory',this)">Respiratory</button>
       </div>
     </div>
 
@@ -1687,14 +1685,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
         <span class="cl">Model Style</span>
         <select class="cs" id="sty" onchange="applyStyle()">
           <option value="stick">Stick</option>
-          <option value="sphere">Atomic Size</option>
-          <option value="line">Wireframe</option>
-        </select>
-      </div>
-      <div class="cr">
-        <span class="cl">Color Scheme</span>
-        <select class="cs" id="col" onchange="applyStyle()">
-          <option value="Jmol">Jmol (CPK)</option>
+          <option value="sphere">Space Fill</option>
           <option value="ssPyMol">PyMol</option>
           <option value="rasmol">RasMol</option>
         </select>
@@ -1719,16 +1710,16 @@ body.pmode #edu-bottom-sheet { display: none !important }
         <div class="idv"></div>
         <div class="igr">
           <div class="ist"><div class="istl">Weight</div><div class="istv" id="i-wt">—</div></div>
-          <div class="ist"><div class="istl">Hybridization</div><div class="istv" id="i-hy">—</div></div>
-          <div class="ist"><div class="istl">Bond Angle</div><div class="istv" id="i-an">—</div></div>
-          <div class="ist"><div class="istl">Dipole Moment</div><div class="istv" id="i-dp">—</div></div>
+          <div class="ist"><div class="istl">Key Function</div><div class="istv" id="i-hy">—</div></div>
+          <div class="ist"><div class="istl">Location</div><div class="istv" id="i-an">—</div></div>
+          <div class="ist"><div class="istl">Dimensions</div><div class="istv" id="i-dp">—</div></div>
         </div>
         <div class="geo">
           <div class="geol">Body System</div>
           <div class="geov" id="i-go">—</div>
         </div>
         <div class="fct">
-          <div class="fctl">⚡ NEET / JEE Fact</div>
+          <div class="fctl">⚡ NEET Exam Fact</div>
           <div class="fctv" id="i-fc">—</div>
         </div>
         <!-- Learning Insights — filled by EDU_CONTENT -->
@@ -1764,21 +1755,21 @@ body.pmode #edu-bottom-sheet { display: none !important }
     <div id="p2d">
       <div class="sp2" id="sp2"></div>
       <div class="f2d" id="f2d">
-        <canvas id="sd-canvas" aria-label="2D molecular structure"></canvas>
+        <canvas id="sd-canvas" aria-label="2D anatomy diagram"></canvas>
         <div class="sd-zoom" role="group" aria-label="Zoom controls">
           <button class="sd-zb" id="sd-zin"  title="Zoom in"   aria-label="Zoom in">+</button>
           <button class="sd-zb" id="sd-zout" title="Zoom out"  aria-label="Zoom out">−</button>
         </div>
         <button class="sd-zoom-reset" id="sd-zreset" title="Reset zoom">1:1</button>
       </div>
-      <div class="l2d" id="l2d">2D Structure</div>
+      <div class="l2d" id="l2d">2D Diagram</div>
     </div>
 
     <!-- Properties panel -->
     <div id="ppr">
       <div>
         <div class="prt" id="prt">Properties</div>
-        <div class="prs">Live data · NCI Cactus API</div>
+        <div class="prs">NEET · Nursing · Class 11 &amp; 12</div>
       </div>
       <div class="prg" id="prg"></div>
     </div>
@@ -1810,7 +1801,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
     <div id="edu-card">
       <div class="edu-mol-name" id="edu-name">—</div>
       <div class="edu-row">
-        <span class="edu-label">Geometry</span>
+        <span class="edu-label">Structure</span>
         <span class="edu-val" id="edu-geo">—</span>
       </div>
       <div class="edu-row">
@@ -1862,7 +1853,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
         <div class="pmp-fact" id="pmp-geo-fact">—</div>
       </div>
       <div class="pmp-card" id="pmp-hyb-card" style="display:none">
-        <div class="pmp-label">Hybridization &amp; Angle</div>
+        <div class="pmp-label">Function &amp; Location</div>
         <div class="pmp-value" id="pmp-hyb">—</div>
         <span class="pmp-badge" id="pmp-angle">—</span>
       </div>
@@ -1893,9 +1884,9 @@ body.pmode #edu-bottom-sheet { display: none !important }
     </div>
 
     <div style="display:flex;flex-direction:column;gap:4px" id="erp-rows">
-      <div class="erp-row"><span class="erp-key">Hybridization</span><span class="erp-val" id="erp-hyb">—</span></div>
-      <div class="erp-row"><span class="erp-key">Bond Angle</span><span class="erp-val" id="erp-ang">—</span></div>
-      <div class="erp-row"><span class="erp-key">Dipole</span><span class="erp-val" id="erp-dip">—</span></div>
+      <div class="erp-row"><span class="erp-key">Key Function</span><span class="erp-val" id="erp-hyb">—</span></div>
+      <div class="erp-row"><span class="erp-key">Location</span><span class="erp-val" id="erp-ang">—</span></div>
+      <div class="erp-row"><span class="erp-key">Dimensions</span><span class="erp-val" id="erp-dip">—</span></div>
     </div>
 
     <div class="erp-card geo" id="erp-polarity-card" style="display:none">
@@ -1918,14 +1909,12 @@ body.pmode #edu-bottom-sheet { display: none !important }
 <div id="pmode-nav-dock">
   <!-- Category filter pills -->
   <div class="pnd-cats" id="pnd-cats">
-    <button class="pnd-cat on" data-cat="skeletal"       onclick="pndSetCat('skeletal',this)">Skeletal</button>
-    <button class="pnd-cat"    data-cat="muscular"       onclick="pndSetCat('muscular',this)">Muscular</button>
-    <button class="pnd-cat"    data-cat="nervous"        onclick="pndSetCat('nervous',this)">Nervous</button>
-    <button class="pnd-cat"    data-cat="cardiovascular" onclick="pndSetCat('cardiovascular',this)">Cardiovascular</button>
-    <button class="pnd-cat"    data-cat="respiratory"    onclick="pndSetCat('respiratory',this)">Respiratory</button>
-    <button class="pnd-cat"    data-cat="digestive"      onclick="pndSetCat('digestive',this)">Digestive</button>
-    <button class="pnd-cat"    data-cat="urinary"        onclick="pndSetCat('urinary',this)">Urinary</button>
-    <button class="pnd-cat"    data-cat="all"            onclick="pndSetCat('all',this)">All</button>
+    <button class="pnd-cat on" data-cat="circulatory" onclick="pndSetCat('circulatory',this)">Circulatory</button>
+    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('organic',this)">Nervous</button>
+    <button class="pnd-cat"    data-cat="excretory"  onclick="pndSetCat('excretory',this)">Excretory</button>
+    <button class="pnd-cat"    data-cat="digestive"    onclick="pndSetCat('digestive',this)">Digestive</button>
+    <button class="pnd-cat"    data-cat="respiratory" onclick="pndSetCat('respiratory',this)">Respiratory</button>
+    <button class="pnd-cat"    data-cat="all"       onclick="pndSetCat('all',this)">All</button>
   </div>
   <!-- Scrollable molecule pill strip -->
   <div class="pnd-pills-wrap" id="pnd-pills-wrap">
@@ -1952,13 +1941,11 @@ body.pmode #edu-bottom-sheet { display: none !important }
   </div>
   <!-- Categories -->
   <div class="ms-cats">
-    <button class="ms-cat on" data-cat="skeletal"       onclick="msCat('skeletal',this)">Skeletal</button>
-    <button class="ms-cat"    data-cat="muscular"       onclick="msCat('muscular',this)">Muscular</button>
-    <button class="ms-cat"    data-cat="nervous"        onclick="msCat('nervous',this)">Nervous</button>
-    <button class="ms-cat"    data-cat="cardiovascular" onclick="msCat('cardiovascular',this)">Cardiovascular</button>
-    <button class="ms-cat"    data-cat="respiratory"    onclick="msCat('respiratory',this)">Respiratory</button>
-    <button class="ms-cat"    data-cat="digestive"      onclick="msCat('digestive',this)">Digestive</button>
-    <button class="ms-cat"    data-cat="urinary"        onclick="msCat('urinary',this)">Urinary</button>
+    <button class="ms-cat on" data-cat="circulatory" onclick="msCat('circulatory',this)">Circulatory</button>
+    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('organic',this)">Nervous</button>
+    <button class="ms-cat"    data-cat="excretory"  onclick="msCat('excretory',this)">Excretory</button>
+    <button class="ms-cat"    data-cat="digestive"    onclick="msCat('digestive',this)">Digestive</button>
+    <button class="ms-cat"    data-cat="respiratory" onclick="msCat('respiratory',this)">Respiratory</button>
   </div>
   <!-- Molecule grid -->
   <div class="ms-grid-wrap">
@@ -1972,10 +1959,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <span class="ms-ctrl-lbl">Style</span>
       <select class="ms-sel" id="ms-sty" onchange="msSyncStyle()">
         <option value="stick">Stick</option>
-        <option value="sphere">Atomic Size</option>
-        <option value="line">Wireframe</option>
-      </select>
-      <span class="ms-ctrl-lbl">Color</span>
+        <option value="sphere">Space Fill</option>
       <select class="ms-sel" id="ms-col" onchange="msSyncColor()">
         <option value="Jmol">CPK</option>
         <option value="ssPyMol">PyMol</option>
@@ -1999,10 +1983,10 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <div class="bs-body" id="bs-body">
     <div class="bs-divider"></div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <div class="bs-row"><span class="bs-row-k">Geometry</span><span class="bs-row-v" id="bs-geo">—</span></div>
-      <div class="bs-row"><span class="bs-row-k">Hybridization</span><span class="bs-row-v" id="bs-hyb">—</span></div>
-      <div class="bs-row"><span class="bs-row-k">Bond Angle</span><span class="bs-row-v" id="bs-ang">—</span></div>
-      <div class="bs-row"><span class="bs-row-k">Dipole</span><span class="bs-row-v" id="bs-dip">—</span></div>
+      <div class="bs-row"><span class="bs-row-k">Structure</span><span class="bs-row-v" id="bs-geo">—</span></div>
+      <div class="bs-row"><span class="bs-row-k">Key Function</span><span class="bs-row-v" id="bs-hyb">—</span></div>
+      <div class="bs-row"><span class="bs-row-k">Location</span><span class="bs-row-v" id="bs-ang">—</span></div>
+      <div class="bs-row"><span class="bs-row-k">Dimensions</span><span class="bs-row-v" id="bs-dip">—</span></div>
     </div>
     <div class="bs-insight" id="bs-insight"></div>
     <div id="bs-chips"><!-- edu chips injected by JS --></div>
@@ -2016,7 +2000,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       <span>3D</span>
     </button>
-    <button class="bt" id="b2d" onclick="setMode('2d')" aria-label="2D Structure view">
+    <button class="bt" id="b2d" onclick="setMode('2d')" aria-label="2D Diagram view">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><path d="M4.9 4.9l2.1 2.1m9 9 2.1 2.1M4.9 19.1l2.1-2.1m9-9 2.1-2.1"/></svg>
       <span>2D</span>
     </button>
@@ -2153,7 +2137,7 @@ const ROT = {
     canvas._rotListeners = true;
   },
 };
-let curCat = 'skeletal', selKey = null;
+let curCat = 'vsepr', selKey = null;
 let curQ = null, curMeta = null, curMode = '3d';
 let dmol = false, token = 0;
 const CACTUS = 'https://cactus.nci.nih.gov/chemical/structure';
@@ -2180,7 +2164,7 @@ window.addEventListener('load', async () => {
 });
 
 function initGrid() {
-  renderGrid('skeletal');
+  renderGrid('vsepr');
   // Desktop grid — event delegation
   document.getElementById('mg').addEventListener('click', e => {
     const card = e.target.closest('.mc');
@@ -2377,16 +2361,7 @@ function msSearch() {
   document.getElementById('ms-err').classList.remove('v');
   closeMolScreen();
   clearErr();
-  const match = searchOrgans(val);
-  if (match) {
-    selKey = match.key;
-    match._key = match.key;
-    renderGrid(curCat);
-    msRenderGrid(curCat);
-    go(match.pname, match);
-  } else {
-    go(val, null);
-  }
+  go(val, null);
 }
 
 /* Mobile style/color sync — keep desktop sidebar in sync */
@@ -2507,51 +2482,14 @@ function pickMol(key) {
   }
 }
 
-/* ════════════════════════════════════════
-   ANATOMY SEARCH
-   Matches query against organ name (m.n),
-   body system (m.h), and function (m.g).
-   Returns the best match from DB or null.
-════════════════════════════════════════ */
-function searchOrgans(query) {
-  const q = query.toLowerCase().trim();
-  if (!q) return null;
-  let exact = null, partial = null;
-  for (const arr of Object.values(DB)) {
-    for (const m of arr) {
-      const name   = (m.n || '').toLowerCase();
-      const system = (m.h || '').toLowerCase();
-      const fn     = (m.g || '').toLowerCase();
-      // Exact name match — highest priority
-      if (name === q) return m;
-      // Starts-with name
-      if (!exact && name.startsWith(q)) { exact = m; continue; }
-      // Name, system, or function contains the query
-      if (!partial && (name.includes(q) || system.includes(q) || fn.includes(q))) {
-        partial = m;
-      }
-    }
-  }
-  return exact || partial;
-}
-
 function doSearch() {
   const val = document.getElementById('mol-in').value.trim();
   if (!val) return;
   selKey = null;
+  renderGrid(curCat);
   clearErr();
   if (window.innerWidth < 768) closeMolScreen();
-  const match = searchOrgans(val);
-  if (match) {
-    selKey = match.key;
-    match._key = match.key;
-    renderGrid(curCat);
-    msRenderGrid(curCat);
-    go(match.pname, match);
-  } else {
-    renderGrid(curCat);
-    go(val, null);
-  }
+  go(val, null);
 }
 
 /* ════════════════════════════════════════
@@ -2572,7 +2510,7 @@ async function cactus(name, rep) {
 async function go(query, meta) {
   const tk = ++token;   // unique token; stale calls are silently dropped
 
-  showLoad(true, query, 'RESOLVING ORGAN…');
+  showLoad(true, query, 'RESOLVING MOLECULE…');
   clearErr();
   document.getElementById('emp').style.display = 'none';
   curQ = query;
@@ -2613,7 +2551,7 @@ async function go(query, meta) {
 
   } catch(err) {
     if (tk !== token) return;
-    showErr(`"${query}" not found. Try: heart, lungs, brain, liver.`);
+    showErr(`"${query}" not found. Try: water, caffeine, aspirin, benzene.`);
     document.getElementById('emp').style.display = 'flex';
   } finally {
     if (tk === token) showLoad(false);
@@ -3388,7 +3326,7 @@ async function load2D(query) {
   frame.classList.remove('rdy');
   frame.style.height = '';
   sp.style.display   = 'block';
-  lbl.textContent    = 'Generating 2D structure…';
+  lbl.textContent    = 'Generating 2D diagram…';
   _sdZoom.scale      = 1;
 
   _sdInitZoomButtons();
@@ -3454,10 +3392,10 @@ async function load2D(query) {
     if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     const errDiv = document.createElement('div');
     errDiv.className = 'sd-err';
-    errDiv.innerHTML = `<span>⬡</span>2D structure unavailable for <strong>${query}</strong>.<br>Try a common name or IUPAC name.`;
+    errDiv.innerHTML = `<span>⬡</span>2D diagram unavailable for <strong>${query}</strong>.<br>Try searching by organ name or body system.`;
     frame.appendChild(errDiv);
     frame.classList.add('rdy');
-    lbl.textContent = '2D structure unavailable';
+    lbl.textContent = '2D diagram unavailable';
   }
 }
 
@@ -3993,11 +3931,11 @@ function updateEduBottomSheet(meta, key) {
   const chipsEl = document.getElementById('bs-chips');
   if (e) {
     chipsEl.innerHTML = [
-      e.geometry_reason ? `<div class="bs-chip geo"><span class="bs-chip-k">Geometry</span>${e.geometry_reason}</div>` : '',
+      e.geometry_reason ? `<div class="bs-chip geo"><span class="bs-chip-k">Structure</span>${e.geometry_reason}</div>` : '',
       e.exam_tip        ? `<div class="bs-chip tip"><span class="bs-chip-k">⚡ Exam Tip</span>${e.exam_tip}</div>` : '',
     ].join('');
   } else if (meta.g) {
-    chipsEl.innerHTML = `<div class="bs-chip geo"><span class="bs-chip-k">Geometry</span>${meta.g}</div>`;
+    chipsEl.innerHTML = `<div class="bs-chip geo"><span class="bs-chip-k">Structure</span>${meta.g}</div>`;
   } else {
     chipsEl.innerHTML = '';
   }
@@ -4300,7 +4238,7 @@ function applyPmodeState(on, device) {
    Lets teachers switch molecules without exiting pmode.
 ════════════════════════════════════════ */
 
-let _pndCat = 'skeletal'; // currently shown category in dock
+let _pndCat = 'vsepr'; // currently shown category in dock
 
 /** Build/refresh the pill strip for a given category */
 function pndRender(cat) {
@@ -4536,7 +4474,7 @@ function updateEduInsights(key) {
   if (!e) { section.style.display = 'none'; return; }
 
   chips.innerHTML = [
-    `<div class="edu-chip geo"><span class="edu-chip-k">Geometry</span>${e.geometry_reason}</div>`,
+    `<div class="edu-chip geo"><span class="edu-chip-k">Structure</span>${e.geometry_reason}</div>`,
     `<div class="edu-chip"><span class="edu-chip-k">Polarity</span>${e.polarity}</div>`,
     `<div class="edu-chip tip"><span class="edu-chip-k">⚡ Exam Tip</span>${e.exam_tip}</div>`,
   ].join('');
@@ -4713,7 +4651,7 @@ window.addEventListener('resize', () => {
   font-size:0.68rem;color:#334155;font-family:monospace;">
   <span id="cs-footer-inst">© AnatomySphere by Praveen · Bastar, Chhattisgarh</span>
   <span style="display:flex;gap:16px;align-items:center;">
-    <span>3Dmol.js · NCI Cactus · PubChem</span>
+    <span>3Dmol.js · NEET · Nursing · Class 11 &amp; 12</span>
     <a href="mailto:praveen@chemsphere.in" style="color:#22d3ee;text-decoration:none;">
       📧 License enquiry
     </a>
@@ -4733,7 +4671,7 @@ async function csGetFallbackInfo(moleculeName) {
 
   // Show loading state in key insight area
   const xi = document.getElementById('pxi') || document.querySelector('[id*="xi"]');
-  if (xi) xi.textContent = 'Loading info from PubChem...';
+  if (xi) xi.textContent = 'Loading organ information...';
 
   try {
     // PubChem: get CID from name
@@ -4767,11 +4705,11 @@ async function csGetFallbackInfo(moleculeName) {
     const fh = document.getElementById('pfh') || document.querySelector('[id*="fh"]');
 
     if (fw && props.MolecularWeight) fw.textContent = props.MolecularWeight + ' g/mol';
-    if (fh && props.IUPACName) fh.textContent = props.IUPACName;
-    if (xi) xi.textContent = wikiSummary || 'Source: PubChem CID ' + cid + '. Search for ' + moleculeName + ' on PubChem for full data.';
+    if (fh && props.IUPACName) fh.textContent = moleculeName;
+    if (xi) xi.textContent = wikiSummary || 'Search for ' + moleculeName + ' in your NEET textbook for detailed information.';
 
   } catch(err) {
-    if (xi) xi.textContent = 'Tip: Search "' + moleculeName + ' NEET JEE" for exam-specific information. 3D structure powered by NCI Cactus.';
+    if (xi) xi.textContent = 'Tip: Search "' + moleculeName + ' NEET" for exam-specific information.';
   }
 }
 
@@ -4817,7 +4755,7 @@ window.csGetFallbackInfo = csGetFallbackInfo;
         <button class="mode-card m-exam"    onclick="qzOpenSettings('exam')">
           <span class="mode-icon">🎯</span>
           <div class="mode-name">Exam Sim</div>
-          <div class="mode-desc">Full 20-question mixed set. Mirrors NEET/JEE MCQ format.</div>
+          <div class="mode-desc">Full 20-question mixed set. Mirrors NEET MCQ format.</div>
           <span class="mode-badge">20 Questions · Full Test</span>
         </button>
         <button class="mode-card m-blitz"   onclick="qzOpenSettings('blitz')">
@@ -4829,14 +4767,12 @@ window.csGetFallbackInfo = csGetFallbackInfo;
       </div>
 
       <div class="hub-filter" id="hub-filter">
-        <button class="filt-btn on" data-cat="all"           onclick="qzPickFilt('all',this)">All Topics</button>
-        <button class="filt-btn"    data-cat="skeletal"       onclick="qzPickFilt('skeletal',this)">Skeletal</button>
-        <button class="filt-btn"    data-cat="muscular"       onclick="qzPickFilt('muscular',this)">Muscular</button>
-        <button class="filt-btn"    data-cat="nervous"        onclick="qzPickFilt('nervous',this)">Nervous</button>
-        <button class="filt-btn"    data-cat="cardiovascular" onclick="qzPickFilt('cardiovascular',this)">Cardiovascular</button>
-        <button class="filt-btn"    data-cat="respiratory"    onclick="qzPickFilt('respiratory',this)">Respiratory</button>
-        <button class="filt-btn"    data-cat="digestive"      onclick="qzPickFilt('digestive',this)">Digestive</button>
-        <button class="filt-btn"    data-cat="urinary"        onclick="qzPickFilt('urinary',this)">Urinary</button>
+        <button class="filt-btn on" data-cat="all"       onclick="qzPickFilt('all',this)">All Topics</button>
+        <button class="filt-btn"    data-cat="circulatory" onclick="qzPickFilt('circulatory',this)">Circulatory</button>
+        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('organic',this)">Nervous</button>
+        <button class="filt-btn"    data-cat="excretory"  onclick="qzPickFilt('excretory',this)">Excretory</button>
+        <button class="filt-btn"    data-cat="digestive"    onclick="qzPickFilt('digestive',this)">Digestive</button>
+        <button class="filt-btn"    data-cat="respiratory" onclick="qzPickFilt('respiratory',this)">Respiratory</button>
       </div>
 
       <div class="sep"></div>
@@ -4848,11 +4784,11 @@ window.csGetFallbackInfo = csGetFallbackInfo;
           <div class="pitch-text">Every question links to the 3D organ you can see in the viewer. Anatomy, organ functions, and body systems come alive — turning memorization into genuine understanding. Switch to the 3D tab anytime to review an organ.</div>
           <div class="pitch-tags">
             <span class="pitch-tag">NEET 2025</span>
-            <span class="pitch-tag">JEE Advanced</span>
+            <span class="pitch-tag">Nursing</span>
             <span class="pitch-tag">Organ Systems</span>
-            <span class="pitch-tag">Hybridization</span>
-            <span class="pitch-tag">Organic Chemistry</span>
-            <span class="pitch-tag">Inorganic</span>
+            <span class="pitch-tag">Human Physiology</span>
+            <span class="pitch-tag">Anatomy</span>
+            <span class="pitch-tag">Class 11 &amp; 12</span>
           </div>
         </div>
       </div>
@@ -4969,12 +4905,12 @@ window.csGetFallbackInfo = csGetFallbackInfo;
     </div>
     <div class="mod-label">Question Type</div>
     <div class="mod-row" id="mod-types">
-      <button class="mod-opt on"   data-val="all"    onclick="qzSelOpt(this,'type')">All Types</button>
-      <button class="mod-opt"      data-val="geo"    onclick="qzSelOpt(this,'type')">Geometry</button>
-      <button class="mod-opt"      data-val="hyb"    onclick="qzSelOpt(this,'type')">Hybridization</button>
-      <button class="mod-opt"      data-val="angle"  onclick="qzSelOpt(this,'type')">Bond Angle</button>
-      <button class="mod-opt"      data-val="dipole" onclick="qzSelOpt(this,'type')">Dipole</button>
-      <button class="mod-opt"      data-val="fact"   onclick="qzSelOpt(this,'type')">Exam Facts</button>
+      <button class="mod-opt on"   data-val="all"      onclick="qzSelOpt(this,'type')">All Types</button>
+      <button class="mod-opt"      data-val="geo"      onclick="qzSelOpt(this,'type')">Structure</button>
+      <button class="mod-opt"      data-val="hyb"      onclick="qzSelOpt(this,'type')">Function</button>
+      <button class="mod-opt"      data-val="angle"    onclick="qzSelOpt(this,'type')">Location</button>
+      <button class="mod-opt"      data-val="dipole"   onclick="qzSelOpt(this,'type')">System</button>
+      <button class="mod-opt"      data-val="fact"     onclick="qzSelOpt(this,'type')">Exam Facts</button>
     </div>
     <div class="mod-label">Difficulty</div>
     <div class="mod-row" id="mod-diff">
@@ -5228,7 +5164,7 @@ function qzRenderQ() {
 
   document.getElementById('q-num').textContent  = `Q${qzIdx+1} / ${qzBank.length}`;
   const tagEl = document.getElementById('q-tag');
-  tagEl.textContent = {geo:'Geometry',hyb:'Hybridization',angle:'Bond Angle',dipole:'Dipole',fact:'Exam Fact'}[q.tag] || q.tag;
+  tagEl.textContent = {geo:'Structure',hyb:'Function',angle:'Location',dipole:'System',fact:'Exam Fact'}[q.tag] || q.tag;
   tagEl.className   = 'q-tag ' + (q.tag==='fact'?'fact':q.tag==='geo'?'geo':'');
   const diffEl = document.getElementById('q-diff');
   if (q.diff==='hard') { diffEl.textContent='HARD'; diffEl.style.display=''; }
