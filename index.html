@@ -1666,7 +1666,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <div class="sl">Chapter</div>
       <div class="ctbs" id="ctbs">
         <button class="ctb on" data-cat="circulatory" onclick="pickCat('circulatory',this)">Circulatory</button>
-        <button class="ctb"    data-cat="nervous"   onclick="pickCat('organic',this)">Nervous</button>
+        <button class="ctb"    data-cat="nervous"   onclick="pickCat('nervous',this)">Nervous</button>
         <button class="ctb"    data-cat="excretory"  onclick="pickCat('excretory',this)">Excretory</button>
         <button class="ctb"    data-cat="digestive"    onclick="pickCat('digestive',this)">Digestive</button>
         <button class="ctb"    data-cat="respiratory" onclick="pickCat('respiratory',this)">Respiratory</button>
@@ -1683,12 +1683,11 @@ body.pmode #edu-bottom-sheet { display: none !important }
     <div class="ss" id="s3d">
       <div class="sl">3D Settings</div>
       <div class="cr">
-        <span class="cl">Model Style</span>
+        <span class="cl">View Mode</span>
         <select class="cs" id="sty" onchange="applyStyle()">
-          <option value="stick">Stick</option>
-          <option value="sphere">Space Fill</option>
-          <option value="ssPyMol">PyMol</option>
-          <option value="rasmol">RasMol</option>
+          <option value="solid">Solid</option>
+          <option value="xray">X-Ray (transparent)</option>
+          <option value="wireframe">Wireframe</option>
         </select>
       </div>
       <div class="cr">
@@ -1911,7 +1910,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <!-- Category filter pills -->
   <div class="pnd-cats" id="pnd-cats">
     <button class="pnd-cat on" data-cat="circulatory" onclick="pndSetCat('circulatory',this)">Circulatory</button>
-    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('organic',this)">Nervous</button>
+    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('nervous',this)">Nervous</button>
     <button class="pnd-cat"    data-cat="excretory"  onclick="pndSetCat('excretory',this)">Excretory</button>
     <button class="pnd-cat"    data-cat="digestive"    onclick="pndSetCat('digestive',this)">Digestive</button>
     <button class="pnd-cat"    data-cat="respiratory" onclick="pndSetCat('respiratory',this)">Respiratory</button>
@@ -1943,7 +1942,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <!-- Categories -->
   <div class="ms-cats">
     <button class="ms-cat on" data-cat="circulatory" onclick="msCat('circulatory',this)">Circulatory</button>
-    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('organic',this)">Nervous</button>
+    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('nervous',this)">Nervous</button>
     <button class="ms-cat"    data-cat="excretory"  onclick="msCat('excretory',this)">Excretory</button>
     <button class="ms-cat"    data-cat="digestive"    onclick="msCat('digestive',this)">Digestive</button>
     <button class="ms-cat"    data-cat="respiratory" onclick="msCat('respiratory',this)">Respiratory</button>
@@ -1957,14 +1956,11 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <div class="ms-ctrls" id="ms-ctrls">
     <div class="ms-ctrl-label">3D Display</div>
     <div class="ms-ctrl-row">
-      <span class="ms-ctrl-lbl">Style</span>
+      <span class="ms-ctrl-lbl">View Mode</span>
       <select class="ms-sel" id="ms-sty" onchange="msSyncStyle()">
-        <option value="stick">Stick</option>
-        <option value="sphere">Space Fill</option>
-      <select class="ms-sel" id="ms-col" onchange="msSyncColor()">
-        <option value="Jmol">CPK</option>
-        <option value="ssPyMol">PyMol</option>
-        <option value="rasmol">RasMol</option>
+        <option value="solid">Solid</option>
+        <option value="xray">X-Ray (transparent)</option>
+        <option value="wireframe">Wireframe</option>
       </select>
     </div>
   </div>
@@ -2177,11 +2173,9 @@ function openMolScreen() {
   document.querySelectorAll('.ms-cat').forEach(b => {
     b.classList.toggle('on', b.dataset.cat === curCat);
   });
-  // Sync mobile style/color selects with desktop sidebar values
+  // Sync mobile view-mode select with desktop sidebar value
   const dSty = document.getElementById('sty');
-  const dCol = document.getElementById('col');
   if (dSty) document.getElementById('ms-sty').value = dSty.value;
-  if (dCol) document.getElementById('ms-col').value = dCol.value;
   // Update bottom tab
   document.getElementById('bmol').classList.add('on');
 }
@@ -2236,15 +2230,10 @@ function msSearch() {
   go(val, null);
 }
 
-/* Mobile style/color sync — keep desktop sidebar in sync */
+/* Mobile view-mode sync — keep desktop sidebar in sync */
 function msSyncStyle() {
   const val = document.getElementById('ms-sty').value;
   document.getElementById('sty').value = val;
-  applyStyle();
-}
-function msSyncColor() {
-  const val = document.getElementById('ms-col').value;
-  document.getElementById('col').value = val;
   applyStyle();
 }
 
@@ -2487,6 +2476,7 @@ async function do3D(meta, tk) {
         });
 
         threeScene.add(threeOrgan);
+        applyStyle();
 
         // Reset camera
         threeCamera.position.set(0, 0, 4);
@@ -2637,8 +2627,29 @@ const ROT = {
   attachListeners() { /* handled by OrbitControls */ },
 };
 
-/* Stub out old 3Dmol functions so existing callers don't throw */
-function applyStyle()      { /* Three.js — style via material properties */ }
+/* Apply the selected View Mode (solid / x-ray / wireframe) to the current organ */
+function applyStyle() {
+  if (!threeOrgan) return;
+  const mode = document.getElementById('sty').value;
+  threeOrgan.traverse(child => {
+    if (child.isMesh && child.material) {
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach(mat => {
+        mat.wireframe = (mode === 'wireframe');
+        if (mode === 'xray') {
+          mat.transparent = true;
+          mat.opacity = 0.35;
+          mat.depthWrite = false;
+        } else {
+          mat.transparent = false;
+          mat.opacity = 1;
+          mat.depthWrite = true;
+        }
+        mat.needsUpdate = true;
+      });
+    }
+  });
+}
 function applyIonicStyle() { /* not applicable to anatomy organs */ }
 function togRot() {
   rotating = document.getElementById('rot').checked;
@@ -3157,108 +3168,6 @@ function fillInfo(m) {
     }
     if (typeof pmodeOn !== 'undefined' && pmodeOn) updatePmodePanelEnhanced(m, key);
   }, OVERLAY_DELAY);
-}
-
-/* ════════════════════════════════════════
-   3D STYLE & ROTATION
-════════════════════════════════════════ */
-function applyStyle() {
-  if (!viewer || !model) return;
-  const s = document.getElementById('sty').value;
-  const c = document.getElementById('col').value;
-  if (s === 'sphere') {
-    model.setStyle({}, {
-      sphere: { scale: 0.26, colorscheme: c },
-      stick:  { radius: 0.10, colorscheme: c }
-    });
-  } else if (s === 'line') {
-    model.setStyle({}, { line: { colorscheme: c } });
-  } else {
-    model.setStyle({}, { stick: { radius: 0.18, colorscheme: c } });
-  }
-  viewer.render();
-}
-
-/* ── Ionic 3D style ─────────────────────────────────────────────────────
-   For ionic compounds: render ALL atoms as large spheres with explicit
-   element colours so single-atom ions (Na⁺, K⁺, Ca²⁺, Cl⁻ etc.) are
-   clearly visible against the dark background.
-   Uses 3Dmol's per-element colour overrides.
-─────────────────────────────────────────────────────────────────────────── */
-function applyIonicStyle() {
-  if (!viewer || !model) return;
-
-  // Explicit bright colours for ions commonly invisible with default schemes
-  const ionColours = {
-    Na: 0xaaaaff,   // soft purple — alkali
-    K:  0xcc88ff,   // violet
-    Li: 0xcc4444,   // red-pink
-    Ca: 0x44cc88,   // green — alkaline earth
-    Mg: 0x22bb77,
-    Ba: 0x44aaff,
-    Fe: 0xff8844,   // orange
-    Cu: 0x44ccff,   // cyan
-    Zn: 0x88ccaa,
-    Al: 0xaaaacc,
-    // Anion-formers keep standard CPK
-    O:  0xff4444,
-    N:  0x4488ff,
-    Cl: 0x00e5b4,
-    F:  0x00e5b4,
-    S:  0xffdd00,
-    P:  0xff9900,
-    C:  0xddddff,
-    H:  0xffffff,
-  };
-
-  // Base style: large spheres for all atoms (makes single-atom ions visible)
-  model.setStyle({}, {
-    sphere: { scale: 0.55, colorscheme: 'Jmol' }
-  });
-
-  // Override colours per element with our bright palette
-  Object.entries(ionColours).forEach(([elem, color]) => {
-    model.setStyle({ elem }, {
-      sphere: { scale: 0.55, color }
-    });
-  });
-
-  // Covalent bonds within a fragment (e.g. O-H in OH⁻) — thin stick
-  model.setStyle({}, {
-    sphere: { scale: 0.55 },  // keep sphere
-    stick:  { radius: 0.12, colorscheme: 'Jmol' }
-  });
-
-  // Re-apply element colours on top of stick (stick doesn't erase sphere in 3Dmol)
-  Object.entries(ionColours).forEach(([elem, color]) => {
-    model.setStyle({ elem }, {
-      sphere: { scale: 0.55, color },
-      stick:  { radius: 0.12, color }
-    });
-  });
-
-  viewer.render();
-}
-function togRot() {
-  rotating = document.getElementById('rot').checked;
-  if (!viewer) return;
-  if (rotating) {
-    ROT.paused = false;
-    ROT.start();
-  } else {
-    ROT.stop();
-  }
-}
-function resetV() {
-  if (!viewer) return;
-  ROT.onInteract(); // brief pause so user can see the reset orientation
-  viewer.zoomTo();
-  viewer.render();
-}
-function zoomV(f) {
-  if (!viewer) return;
-  ROT.onInteract();
-  viewer.zoom(f, 500);
 }
 
 /* ════════════════════════════════════════
@@ -4432,7 +4341,7 @@ window.csGetFallbackInfo = csGetFallbackInfo;
       <div class="hub-filter" id="hub-filter">
         <button class="filt-btn on" data-cat="all"       onclick="qzPickFilt('all',this)">All Topics</button>
         <button class="filt-btn"    data-cat="circulatory" onclick="qzPickFilt('circulatory',this)">Circulatory</button>
-        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('organic',this)">Nervous</button>
+        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('nervous',this)">Nervous</button>
         <button class="filt-btn"    data-cat="excretory"  onclick="qzPickFilt('excretory',this)">Excretory</button>
         <button class="filt-btn"    data-cat="digestive"    onclick="qzPickFilt('digestive',this)">Digestive</button>
         <button class="filt-btn"    data-cat="respiratory" onclick="qzPickFilt('respiratory',this)">Respiratory</button>
