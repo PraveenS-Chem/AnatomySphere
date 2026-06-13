@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AnatomySphere — Free 3D Anatomy Viewer for NEET & Nursing</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js" async></script>
 <style>
 /* ─── TOKENS ─────────────────────────────────────────── */
 :root {
@@ -2070,6 +2070,8 @@ async function loadAnatomyDB() {
     DB = DB_FALLBACK;
     console.warn('[AnatomySphere] anatomy-db.json fetch failed, using fallback DB:', err.message);
   }
+  // Build showcase grid now that DB is ready
+  buildShowcaseGrid();
 }
 
 /* ════════════════════════════════════════
@@ -2087,58 +2089,7 @@ let rotating = true;
    when the GL context is already compositing, causing the "rotate only
    after touch" bug on mobile).
 ════════════════════════════════════════ */
-const ROT = {
-  rafId:       null,
-  paused:      false,   // true while user is dragging/zooming
-  resumeTimer: null,    // timeout to resume after inactivity
-  RESUME_MS:   2500,    // ms of inactivity before auto-resume
-  STEP_NORMAL: 0.4,     // degrees per frame — slow educational spin
-  STEP_PMODE:  0.22,    // cinematic, readable in presentation mode
-  STEP_MOBILE: 0.30,    // slightly reduced for mid-range Android
-
-  step() {
-    if (pmodeOn) return this.STEP_PMODE;
-    if (window.innerWidth < 768) return this.STEP_MOBILE;
-    return this.STEP_NORMAL;
-  },
-
-  start() {
-    if (!viewer || !rotating) return;
-    this.stop(); // clear any existing loop first
-    const tick = () => {
-      if (!this.paused && viewer && rotating && curMode === '3d') {
-        viewer.rotate(this.step(), 'y');
-        viewer.render();
-      }
-      this.rafId = requestAnimationFrame(tick);
-    };
-    this.rafId = requestAnimationFrame(tick);
-  },
-
-  stop() {
-    if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; }
-  },
-
-  // Called on any user interaction with the 3D canvas
-  onInteract() {
-    if (!rotating) return;
-    this.paused = true;
-    clearTimeout(this.resumeTimer);
-    this.resumeTimer = setTimeout(() => {
-      this.paused = false;
-    }, this.RESUME_MS);
-  },
-
-  // Attach interaction listeners to the 3Dmol canvas element
-  attachListeners() {
-    const canvas = document.querySelector('#c3d canvas');
-    if (!canvas || canvas._rotListeners) return; // already attached
-    const onInteract = () => this.onInteract();
-    canvas.addEventListener('pointerdown', onInteract, { passive: true });
-    canvas.addEventListener('wheel',       onInteract, { passive: true });
-    canvas._rotListeners = true;
-  },
-};
+/* ROT controller defined below after Three.js globals — see initThreeViewer section */
 let curCat = 'vsepr', selKey = null;
 let curQ = null, curMeta = null, curMode = '3d';
 let token = 0;
@@ -3447,13 +3398,13 @@ Object.defineProperty(window, '_viewerReady', {
   const intro = document.getElementById('intro-screen');
   if (sessionStorage.getItem('cs-intro-seen')) {
     intro.style.display = 'none';
-    // Returning user: load smart default
-    window._viewerReady
-      ? loadSmartDefault()
-      : (window._onViewerReady = loadSmartDefault);
+    // Returning user: load smart default after DB ready
+    // DB loads async so defer via small timeout
+    setTimeout(() => loadSmartDefault(), 300);
     return;
   }
-  buildShowcaseGrid();
+  // First visit — showcase built after DB loads (see loadAnatomyDB callback)
+  // buildShowcaseGrid() is called from loadAnatomyDB() on success
 })();
 
 function buildShowcaseGrid() {
@@ -3476,27 +3427,22 @@ function buildShowcaseGrid() {
 function enterApp(loadDemo) {
   sessionStorage.setItem('cs-intro-seen', '1');
   const intro = document.getElementById('intro-screen');
-  intro.classList.add('out');
+  if (intro) intro.classList.add('out');
 
-  if (loadDemo) {
-    // "Load Demo Molecules" — skip showcase, go straight to guided demo
-    setTimeout(() => {
-      intro.style.display = 'none';
-      const kickDemo = () => { startDemo(); toast('Demo running — tap ✕ to exit', 'k'); };
-      window._viewerReady ? kickDemo() : (window._onViewerReady = kickDemo);
-    }, 650);
-    return;
-  }
-
-  // "Start Exploring" — cinematic transition → showcase
   setTimeout(() => {
-    intro.style.display = 'none';
-    showEntryTransition();
+    if (intro) intro.style.display = 'none';
+    if (loadDemo) {
+      startDemo();
+      toast('Demo running — tap ✕ to exit', 'k');
+    } else {
+      showEntryTransition();
+    }
   }, 650);
 }
 
 function showEntryTransition() {
   const et = document.getElementById('entry-transition');
+  if (!et) { showShowcase(); return; }  // null guard
   et.style.pointerEvents = 'none';
   et.classList.add('in');
   setTimeout(() => {
@@ -3509,24 +3455,25 @@ function showEntryTransition() {
 
 function showShowcase() {
   buildShowcaseGrid();
-  document.getElementById('showcase-screen').classList.add('v');
+  const sc = document.getElementById('showcase-screen');
+  if (sc) sc.classList.add('v');
 }
 
 function dismissShowcase(skipLoad) {
-  document.getElementById('showcase-screen').classList.remove('v');
+  const sc = document.getElementById('showcase-screen');
+  if (sc) sc.classList.remove('v');
   stopMiniDemo();
   if (!skipLoad) {
     const defaultKey = window.innerWidth < 768 ? 'circ-heart' : 'nerv-brain';
-    const load = () => pickMol(defaultKey);
-    window._viewerReady ? load() : (window._onViewerReady = load);
+    setTimeout(() => pickMol(defaultKey), 100);
   }
 }
 
 function showcasePick(key) {
   stopMiniDemo();
-  document.getElementById('showcase-screen').classList.remove('v');
-  const load = () => pickMol(key);
-  window._viewerReady ? load() : (window._onViewerReady = load);
+  const sc = document.getElementById('showcase-screen');
+  if (sc) sc.classList.remove('v');
+  setTimeout(() => pickMol(key), 100);
 }
 
 function loadSmartDefault() {
@@ -3543,12 +3490,12 @@ function startMiniDemo() {
 function runMiniDemoStep() {
   if (!miniDemoActive || miniDemoIdx >= MINI_DEMO.length) {
     stopMiniDemo();
-    toast('Tap any molecule to explore →', 'k');
+    toast('Tap any organ to explore →', 'k');
     return;
   }
   const step = MINI_DEMO[miniDemoIdx];
-  const load = () => { pickMol(step.key); setTimeout(() => toast(step.caption,'k'), 800); };
-  window._viewerReady ? load() : (window._onViewerReady = load);
+  pickMol(step.key);
+  setTimeout(() => toast(step.caption, 'k'), 800);
   miniDemoIdx++;
   miniDemoTimer = setTimeout(runMiniDemoStep, 5500);
 }
@@ -4434,7 +4381,7 @@ window.addEventListener('resize', () => {
   font-size:0.68rem;color:#334155;font-family:monospace;">
   <span id="cs-footer-inst">© AnatomySphere by Praveen · Bastar, Chhattisgarh</span>
   <span style="display:flex;gap:16px;align-items:center;">
-    <span>3Dmol.js · NEET · Nursing · Class 11 &amp; 12</span>
+    <span>Three.js · NEET · Nursing · Class 11 &amp; 12</span>
     <a href="mailto:praveen@chemsphere.in" style="color:#22d3ee;text-decoration:none;">
       📧 License enquiry
     </a>
