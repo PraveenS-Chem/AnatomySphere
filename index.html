@@ -3075,73 +3075,6 @@ async function load2D(meta) {
   }
 }
 
-  // Extract atom symbol and charge from a SMILES fragment
-  function parseFragment(frag) {
-    // Match bracket atoms: [Na+], [OH-], [Ca2+], [SO4 2-], [NH4+]
-    const bracketMatch = frag.match(/^\[([A-Z][a-z]?)(\d*)(H\d*)?([+-]\d*|[+-])?\]$/);
-    if (bracketMatch) {
-      const sym = bracketMatch[1];
-      const charge = bracketMatch[4] || '';
-      // Format charge: '+' → '⁺', '-' → '⁻', '2+' → '²⁺' etc
-      const chargeStr = charge
-        .replace('2+','²⁺').replace('3+','³⁺').replace('+','⁺')
-        .replace('2-','²⁻').replace('3-','³⁻').replace('-','⁻');
-      return { sym, chargeStr, isSimple: true };
-    }
-    // For multi-atom fragments like [OH-], CO3, etc — show condensed formula
-    // Strip brackets and charges to get readable formula
-    let formula = frag
-      .replace(/\[/g,'').replace(/\]/g,'')
-      .replace(/[0-9]?\+[0-9]?/g,'⁺').replace(/[0-9]?\-[0-9]?/g,'⁻')
-      .replace(/#/g,'').replace(/\//g,'').replace(/\\/g,'')
-      .replace(/\(/g,'').replace(/\)/g,'')
-      .replace(/=/g,'');
-    // Collapse atom+count for subscript display — keep as-is for SVG text
-    return { sym: formula, chargeStr: '', isSimple: false, raw: true };
-  }
-
-  const ions = fragments.map(parseFragment);
-  const n = ions.length;
-  const spacing = Math.min(160, 320 / n);
-  const startX = 250 - (spacing * (n - 1)) / 2;
-
-  // Colour map for common ions
-  const ionColour = sym => {
-    const s = sym.toUpperCase();
-    if (['NA','K','LI','CS','RB'].includes(s))  return '#aaaaff';  // alkali
-    if (['MG','CA','BA','SR'].includes(s))       return '#ffaa44';  // alkaline earth
-    if (['CL','BR','I','F'].includes(s))         return '#00e5b4';  // halide
-    if (s === 'O' || s.startsWith('O'))          return '#ff6b6b';  // oxide/hydroxide
-    if (s === 'N' || s.startsWith('N'))          return '#4a8fff';  // nitrogen
-    if (s === 'S' || s.startsWith('S'))          return '#ffd700';  // sulfur
-    return '#dde8ff';  // default
-  };
-
-  const ionSvgs = ions.map((ion, i) => {
-    const x = startX + i * spacing;
-    const col = ionColour(ion.sym);
-    const symLen = ion.sym.length;
-    const fontSize = symLen <= 2 ? 36 : symLen <= 4 ? 26 : 20;
-    const r = Math.max(28, symLen * 9);
-    return `
-      <circle cx="${x}" cy="190" r="${r}" fill="${col}" fill-opacity="0.12" stroke="${col}" stroke-width="1.2"/>
-      <text x="${x}" y="196" font-family="'JetBrains Mono',monospace" font-weight="700"
-            font-size="${fontSize}" fill="${col}" text-anchor="middle" dominant-baseline="central">${ion.sym}</text>
-      ${ion.chargeStr ? `<text x="${x+r-6}" y="${190-r+10}" font-size="18" fill="${col}"
-            font-family="'JetBrains Mono',monospace" font-weight="700" text-anchor="middle">${ion.chargeStr}</text>` : ''}
-      ${i < n-1 ? `<text x="${x + spacing/2}" y="196" font-size="22" fill="#3a4a6a"
-            text-anchor="middle" dominant-baseline="central" font-family="sans-serif">···</text>` : ''}
-    `;
-  }).join('');
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 380"
-               style="width:100%;height:auto;display:block;background:transparent">
-    ${ionSvgs}
-    <text x="250" y="340" font-family="'JetBrains Mono',monospace" font-size="11"
-          fill="#5a6e96" text-anchor="middle">Ionic compound · electrostatic attraction</text>
-  </svg>`;
-}
-
 /* ════════════════════════════════════════
    PROPERTIES PANEL — anatomy fields
 ════════════════════════════════════════ */
@@ -3769,7 +3702,7 @@ const EDU_HIGHLIGHTS = {
   'resp-lungs':   { title:'Alveolar Gas Exchange',        text:'~300 million alveoli provide ~70 m² surface area. O₂ diffuses from alveoli into blood; CO₂ from blood into alveoli. Thin 0.5 µm respiratory membrane enables rapid diffusion.' },
   'dige-liver':   { title:'Portal Circulation',           text:'All blood from intestines passes through the liver via the hepatic portal vein before reaching general circulation. Liver detoxifies absorbed substances — first-pass metabolism.' },
   'dige-stomach': { title:'Gastric Cell Types',           text:'Parietal cells → HCl + intrinsic factor. Chief cells → pepsinogen → pepsin. G-cells → gastrin. Each cell type has a distinct, exam-tested function.' },
-  'dige-kidney':  { title:'Nephron — Functional Unit',    text:'Each kidney has ~1 million nephrons. Bowman's capsule filters blood; PCT reabsorbs glucose; Loop of Henle concentrates urine; ADH controls water reabsorption in collecting duct.' },
+  'dige-kidney':  { title:'Nephron — Functional Unit',    text:'Each kidney has ~1 million nephrons. Bowman\'s capsule filters blood; PCT reabsorbs glucose; Loop of Henle concentrates urine; ADH controls water reabsorption in collecting duct.' },
 };
 
 function showEduHighlight(key) {
@@ -4119,7 +4052,7 @@ const EDU_CONTENT = {
     geometry_reason: 'Convoluted (folded) surface of cerebrum — gyri (ridges) and sulci (grooves) — maximises cortical surface area within the fixed skull volume.',
     polarity: 'Functional lateralisation — left hemisphere controls right body side and language; right hemisphere controls left side and spatial reasoning.',
     exam_tip: 'Key distinction: Medulla oblongata controls vital involuntary functions (heartbeat, respiration) — damage is fatal. Cerebellum damage = loss of coordination but NOT paralysis.',
-    real_world: 'Brain consumes 20% of body's oxygen despite being only 2% of body weight. Neurons cannot divide post-natally — brain injury damage is often permanent.',
+    real_world: 'Brain consumes 20% of body\'s oxygen despite being only 2% of body weight. Neurons cannot divide post-natally — brain injury damage is often permanent.',
   },
   'resp-lungs': {
     short: [
@@ -4179,7 +4112,7 @@ const EDU_CONTENT = {
       'Loop of Henle creates concentration gradient in medulla — enables concentrated urine; absent in birds/amphibians',
     ],
     presentation: [
-      'Nephron: Bowman's capsule (filtration) → PCT (glucose, amino acids, 70% water reabsorbed) → Loop of Henle (concentration) → DCT (selective reabsorption) → Collecting duct (ADH-controlled water)',
+      'Nephron: Bowman\'s capsule (filtration) → PCT (glucose, amino acids, 70% water reabsorbed) → Loop of Henle (concentration) → DCT (selective reabsorption) → Collecting duct (ADH-controlled water)',
       'Juxtaglomerular apparatus (JGA) produces renin → angiotensin → raises blood pressure (RAAS pathway)',
       'ADH (posterior pituitary) acts on collecting duct → increases water reabsorption → concentrated urine',
       'Aldosterone (adrenal cortex) acts on DCT → Na⁺ reabsorption → water retention → raises blood pressure',
