@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AnatomySphere — Free 3D Anatomy Viewer for NEET & Nursing</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js" defer></script>
-<script src="https://unpkg.com/smiles-drawer@2.1.7/dist/smiles-drawer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js" defer></script>
 <style>
 /* ─── TOKENS ─────────────────────────────────────────── */
 :root {
@@ -176,7 +177,7 @@ header{
 
 #p2d{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg);padding:16px}
 #p2d.on{display:flex}
-/* ─── 2D SVG PANEL (SmilesDrawer) ─── */
+/* ─── 2D ANATOMY DIAGRAM PANEL ─── */
 .f2d{
   display:none;
   background:var(--s1);
@@ -190,7 +191,7 @@ header{
 }
 .f2d.rdy{display:block}
 
-/* Canvas fills the frame; SmilesDrawer will set intrinsic size,
+/* Canvas area for anatomy diagrams — SVG injected by load2D()
    CSS keeps it responsive and never overflows */
 #sd-canvas{
   display:block;
@@ -1751,7 +1752,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
     <!-- 3D panel -->
     <div id="p3d"><div id="c3d"></div></div>
 
-    <!-- 2D panel — SmilesDrawer SVG rendering -->
+    <!-- 2D panel — Anatomy SVG diagram -->
     <div id="p2d">
       <div class="sp2" id="sp2"></div>
       <div class="f2d" id="f2d">
@@ -2074,6 +2075,7 @@ async function loadAnatomyDB() {
 /* ════════════════════════════════════════
    STATE
 ════════════════════════════════════════ */
+/* viewer/model stubs — Three.js globals are threeScene/threeRenderer/threeOrgan */
 let viewer = null, model = null;
 let rotating = true;
 
@@ -2139,8 +2141,9 @@ const ROT = {
 };
 let curCat = 'vsepr', selKey = null;
 let curQ = null, curMeta = null, curMode = '3d';
-let dmol = false, token = 0;
-const CACTUS = 'https://cactus.nci.nih.gov/chemical/structure';
+let token = 0;
+/* dmol kept as false stub — existing callers check it but Three.js handles 3D now */
+let dmol = false;
 
 /* ════════════════════════════════════════
    INIT
@@ -2149,19 +2152,30 @@ window.addEventListener('load', async () => {
   await loadAnatomyDB();   // populate DB before any grid/viewer init
   initGrid();
   initKeyboard();
-  initViewer();
+  initLibStatus();
 
   window.addEventListener('resize', () => {
-    if (!viewer) return;
-    requestAnimationFrame(() => { viewer.resize(); viewer.render(); });
-    // Re-evaluate responsive edu panels on resize
     if (curMeta) {
-      const key = curMeta._key || null;
+      const key = curMeta._key || curMeta.key || null;
       updateEduRightPanel(curMeta, key);
       updateEduBottomSheet(curMeta, key);
     }
   });
 });
+
+function initLibStatus() {
+  document.getElementById('ldr').classList.add('h');
+  const ls = document.getElementById('libst');
+  // Three.js loads deferred — check after short delay
+  setTimeout(() => {
+    const threeOk = typeof THREE !== 'undefined';
+    ls.innerHTML = `<span class="${threeOk ? 'lok' : 'lfl'}">${threeOk ? '✓' : '✗'} Three.js GLTFLoader</span><span class="lok">✓ Anatomy SVG diagrams</span>`;
+  }, 800);
+  window._viewerReady = true;
+}
+
+/* stub — no longer used but called by some legacy paths */
+function initViewer() { initLibStatus(); }
 
 function initGrid() {
   renderGrid('vsepr');
@@ -2192,99 +2206,6 @@ function initKeyboard() {
   document.getElementById('ms-in').addEventListener('keypress', e => {
     if (e.key === 'Enter') msSearch();
   });
-}
-
-function initViewer() {
-  document.getElementById('ldr').classList.add('h');
-  const ls = document.getElementById('libst');
-
-  if (typeof $3Dmol === 'undefined') {
-    ls.innerHTML = '<span class="lfl">✗ 3Dmol.js not loaded</span><span class="lok">✓ SmilesDrawer SVG</span>';
-    window._viewerReady = true;
-    return;
-  }
-
-  dmol = true;
-  ls.innerHTML = '<span class="lok">✓ 3Dmol.js ready</span><span class="lok">✓ SmilesDrawer SVG</span>';
-
-  // Use a helper that waits until the viewer element has a real non-zero size
-  // before creating the WebGL context. This fixes the 0×0 canvas bug on
-  // Android Chrome in desktop mode (and any other deferred-layout scenario).
-  function createViewerWhenReady(attempt) {
-    attempt = attempt || 1;
-    const vwEl = document.getElementById('vw');
-    const c3d  = document.getElementById('c3d');
-    const W = vwEl.clientWidth  || vwEl.offsetWidth;
-    const H = vwEl.clientHeight || vwEl.offsetHeight;
-
-    if (W < 10 || H < 10) {
-      // Element not laid out yet — retry up to 30 times (~1.5 s total)
-      if (attempt < 30) {
-        setTimeout(() => createViewerWhenReady(attempt + 1), 50);
-      } else {
-        // Last-resort fallback: use window dimensions minus sidebar
-        const FW = window.innerWidth  - 300;
-        const FH = window.innerHeight - 56;
-        c3d.style.width  = FW + 'px';
-        c3d.style.height = FH + 'px';
-        tryCreate();
-      }
-      return;
-    }
-
-    // Stamp explicit px so WebGL context gets a definite non-zero size
-    c3d.style.width  = W + 'px';
-    c3d.style.height = H + 'px';
-    tryCreate();
-
-    function tryCreate() {
-      try {
-        viewer = $3Dmol.createViewer(c3d, { backgroundColor:'#060810', antialias:true });
-        // Clear the forced size — let CSS take over — then resize
-        requestAnimationFrame(() => {
-          c3d.style.width  = '';
-          c3d.style.height = '';
-          viewer.resize();
-          viewer.render();
-          ROT.attachListeners();
-          window._viewerReady = true;
-
-          // Fire any pending load callback (e.g. initial molecule load that
-          // was deferred because the viewer wasn't ready yet — happens on
-          // Firefox where initViewer completes after the first pickMol call)
-          if (typeof window._onViewerReady === 'function') {
-            const cb = window._onViewerReady;
-            window._onViewerReady = null;
-            cb();
-          }
-
-          // Belt-and-suspenders: resize again after 600 ms for desktop-mode lag
-          setTimeout(() => { viewer.resize(); viewer.render(); }, 600);
-
-          // Install ResizeObserver so canvas always fills the pane on window resize
-          if (typeof ResizeObserver !== 'undefined') {
-            new ResizeObserver(() => {
-              if (viewer) { viewer.resize(); viewer.render(); }
-            }).observe(vwEl);
-          }
-        });
-      } catch(err) {
-        console.error('3Dmol init failed:', err);
-        dmol = false;
-        ls.innerHTML = '<span class="lfl">✗ 3Dmol error: ' + err.message + '</span>';
-        window._viewerReady = true;
-        // Still fire the callback so the UI doesn't hang
-        if (typeof window._onViewerReady === 'function') {
-          const cb = window._onViewerReady;
-          window._onViewerReady = null;
-          cb();
-        }
-      }
-    }
-  }
-
-  // Kick off after two rAF cycles (ensures first paint is done)
-  requestAnimationFrame(() => requestAnimationFrame(() => createViewerWhenReady(1)));
 }
 
 /* ════════════════════════════════════════
@@ -2493,633 +2414,715 @@ function doSearch() {
 }
 
 /* ════════════════════════════════════════
-   NCI CACTUS helper
+   THREE.JS GLOBALS
 ════════════════════════════════════════ */
-async function cactus(name, rep) {
-  const url = `${CACTUS}/${encodeURIComponent(name)}/${rep}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const txt = await res.text();
-  if (!txt || txt.includes('Page not found') || !txt.trim()) throw new Error('Not found');
-  return txt.trim();
-}
+let threeScene = null, threeCamera = null, threeRenderer = null;
+let threeControls = null, threeOrgan = null, threeAnimId = null;
 
 /* ════════════════════════════════════════
-   MAIN ORCHESTRATOR — race-condition safe
+   MAIN ORCHESTRATOR — anatomy GLB pipeline
 ════════════════════════════════════════ */
 async function go(query, meta) {
-  const tk = ++token;   // unique token; stale calls are silently dropped
+  const tk = ++token;
 
-  showLoad(true, query, 'RESOLVING MOLECULE…');
+  showLoad(true, meta ? meta.n : query, 'LOADING ORGAN…');
   clearErr();
   document.getElementById('emp').style.display = 'none';
-  curQ = query;
+  curQ   = query;
   curMeta = meta;
 
-  try {
-    // Verify exists on Cactus & get IUPAC name
-    const iupac = await cactus(query, 'iupac_name').catch(() => null);
-    if (tk !== token) return;
+  if (!meta) {
+    // Free-text search — try to match against DB
+    meta = searchDB(query);
+    if (meta) { meta._key = meta.key; curMeta = meta; }
+  }
 
-    // ── Load ALL panels simultaneously ────────────────────────────────────
-    // Each panel loads independently in parallel so switching tabs is instant.
-    // do3D / load2D / loadProps each check (tk !== token) internally where
-    // needed; we suppress individual panel errors silently — only the active
-    // panel error is surfaced to the user.
+  if (!meta || !meta.glb) {
+    if (tk !== token) return;
+    showErr(`"${query}" not found. Try: Heart, Brain, Liver, Kidney.`);
+    document.getElementById('emp').style.display = 'flex';
+    showLoad(false);
+    return;
+  }
+
+  try {
     const results = await Promise.allSettled([
-      do3D(query, tk),
-      load2D(query),
-      loadProps(query, meta),
+      do3D(meta, tk),
+      load2D(meta),
+      loadProps(meta),
     ]);
     if (tk !== token) return;
 
-    // Surface error only if the ACTIVE panel failed
     const panelIdx = { '3d': 0, '2d': 1, 'props': 2 };
     const activeIdx = panelIdx[curMode] ?? 0;
-    if (results[activeIdx].status === 'rejected') {
-      throw results[activeIdx].reason;
-    }
-    // ─────────────────────────────────────────────────────────────────────
+    if (results[activeIdx].status === 'rejected') throw results[activeIdx].reason;
 
-    // Fill sidebar info card
-    if (meta) fillInfo(meta);
-    else      await liveMeta(query, iupac);
-
-    // Update badge
-    document.getElementById('bnm').textContent = meta ? meta.n : (iupac || query);
+    fillInfo(meta);
+    document.getElementById('bnm').textContent = meta.n;
     document.getElementById('bdg').classList.add('v');
 
   } catch(err) {
     if (tk !== token) return;
-    showErr(`"${query}" not found. Try: water, caffeine, aspirin, benzene.`);
+    showErr(`Could not load "${meta.n}". Check your connection and try again.`);
     document.getElementById('emp').style.display = 'flex';
   } finally {
     if (tk === token) showLoad(false);
   }
 }
 
-/* ════════════════════════════════════════
-   3D RENDER
-   ─────────────────────────────────────
-   Ionic compound handling:
-   Cactus returns disconnected SDF for salts/ionic compounds (NaOH, NaCl, etc.)
-   — the Na⁺ and OH⁻ appear as separate unconnected fragments far apart or at
-   the origin, rendering as floating spheres with no bond visible.
-   
-   Fix: parseSdfConnectivity() detects disconnected SDFs.
-   If disconnected → rebuildIonicSdf() repositions fragment centroids at a
-   chemically realistic ion-pair distance (~2.3 Å) so the compound displays
-   as a proper ion pair, and shows a toast label.
-════════════════════════════════════════ */
-
-/* ════════════════════════════════════════
-   IONIC COMPOUND 3D — robust SDF handling
-   ─────────────────────────────────────
-   Cactus returns ionic compounds (NaOH, NaCl, etc.) as either:
-   A) A single disconnected molblock (3 atoms, 1 bond for NaOH)
-   B) Multiple molblocks separated by $$$$ (one per ion)
-
-   Both cases caused broken 3D: atoms appeared far apart or overlapping
-   because only the first molblock was being repositioned.
-
-   Fix pipeline:
-   1. mergeSdfRecords()  — collapse any multi-record SDF into ONE molblock
-                           with all atoms + bonds combined
-   2. parseSdfConnectivity() — detect if the merged block is disconnected
-   3. rebuildIonicSdf()  — reposition fragment centroids at ION_DIST apart
-════════════════════════════════════════ */
-
-/* Step 1 — Merge a multi-record SDF ($$$$-separated) into one molblock.
-   If already a single record, returns sdf unchanged. */
-function mergeSdfRecords(sdf) {
-  // Normalise line endings
-  const text = sdf.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-  // Split into individual molblock records
-  const records = text.split(/\$\$\$\$/).map(r => r.trim()).filter(r => r.length > 0);
-  if (records.length <= 1) return text; // already single record — nothing to do
-
-  // Parse each record's atom and bond lines
-  let allAtomLines = [];
-  let allBondLines = [];
-
-  records.forEach(rec => {
-    const lines = rec.split('\n');
-    const countsLine = lines[3] || '';
-    const atomCount = parseInt(countsLine.substring(0, 3).trim()) || 0;
-    const bondCount = parseInt(countsLine.substring(3, 6).trim()) || 0;
-    const atomOffset = allAtomLines.length; // for renumbering bonds
-
-    // Collect atom lines (lines 4 … 4+atomCount-1)
-    for (let i = 4; i < 4 + atomCount; i++) {
-      if (lines[i]) allAtomLines.push(lines[i]);
-    }
-
-    // Collect bond lines (renumber atom indices by offset)
-    const bondStart = 4 + atomCount;
-    for (let i = bondStart; i < bondStart + bondCount; i++) {
-      const bl = lines[i];
-      if (!bl || bl.trim() === '') continue;
-      const a1 = parseInt(bl.substring(0, 3).trim()) + atomOffset;
-      const a2 = parseInt(bl.substring(3, 6).trim()) + atomOffset;
-      const rest = bl.substring(6); // bond type, stereo, etc
-      allBondLines.push(
-        String(a1).padStart(3) + String(a2).padStart(3) + rest
-      );
-    }
-  });
-
-  // Build merged counts line
-  const totalAtoms = allAtomLines.length;
-  const totalBonds = allBondLines.length;
-  const countsNew = String(totalAtoms).padStart(3) +
-                    String(totalBonds).padStart(3) +
-                    '  0  0  0  0  0  0  0  0999 V2000';
-
-  // Use header from first record
-  const firstLines = records[0].split('\n');
-  const merged = [
-    firstLines[0] || '',   // molecule name
-    firstLines[1] || '',   // program/date
-    firstLines[2] || '',   // comment
-    countsNew,
-    ...allAtomLines,
-    ...allBondLines,
-    'M  END',
-  ].join('\n');
-
-  console.log(`[AnatomySphere 3D] Merged ${records.length} SDF records → ${totalAtoms} atoms, ${totalBonds} bonds`);
-  return merged;
-}
-
-/* Step 2 — Detect disconnected graph in a single molblock. */
-function parseSdfConnectivity(sdf) {
-  const lines = sdf.replace(/\r\n/g, '\n').split('\n');
-  const countsLine = lines[3] || '';
-  const atomCount = parseInt(countsLine.substring(0, 3).trim()) || 0;
-  const bondCount = parseInt(countsLine.substring(3, 6).trim()) || 0;
-  const disconnected = atomCount > 1 && bondCount < atomCount - 1;
-  return { atomCount, bondCount, disconnected };
-}
-
-/* Step 3 — Reposition fragment centroids along X axis at ION_DIST spacing. */
-function rebuildIonicSdf(sdf) {
-  const ION_DIST = 2.4; // Å — representative ionic bond length
-  const lines = sdf.replace(/\r\n/g, '\n').split('\n');
-  const countsLine = lines[3] || '';
-  const atomCount = parseInt(countsLine.substring(0, 3).trim()) || 0;
-  const bondCountN = parseInt(countsLine.substring(3, 6).trim()) || 0;
-
-  if (atomCount === 0) return sdf;
-
-  // Parse atom coordinates
-  const atomLines = lines.slice(4, 4 + atomCount);
-  const atoms = atomLines.map(l => ({
-    x: parseFloat(l.substring(0, 10)) || 0,
-    y: parseFloat(l.substring(10, 20)) || 0,
-    z: parseFloat(l.substring(20, 30)) || 0,
-    rest: l.substring(30),
-  }));
-
-  // Union-find to identify fragments
-  const parent = Array.from({length: atomCount}, (_, i) => i);
-  function find(x) { return parent[x] === x ? x : (parent[x] = find(parent[x])); }
-  function union(a, b) { parent[find(a)] = find(b); }
-
-  const bondStart = 4 + atomCount;
-  lines.slice(bondStart, bondStart + bondCountN).forEach(bl => {
-    if (!bl || bl.trim() === '' || bl.startsWith('M')) return;
-    const a = parseInt(bl.substring(0, 3).trim()) - 1;
-    const b = parseInt(bl.substring(3, 6).trim()) - 1;
-    if (a >= 0 && b >= 0 && a < atomCount && b < atomCount) union(a, b);
-  });
-
-  // Group into fragments
-  const fragMap = new Map();
-  atoms.forEach((_, i) => {
-    const root = find(i);
-    if (!fragMap.has(root)) fragMap.set(root, []);
-    fragMap.get(root).push(i);
-  });
-  const fragList = [...fragMap.values()];
-  if (fragList.length < 2) return sdf; // already connected
-
-  // Sort fragments largest-first so the main ion is centred
-  fragList.sort((a, b) => b.length - a.length);
-
-  // Compute centroid of each fragment
-  const centroids = fragList.map(idxs => ({
-    x: idxs.reduce((s, i) => s + atoms[i].x, 0) / idxs.length,
-    y: idxs.reduce((s, i) => s + atoms[i].y, 0) / idxs.length,
-    z: idxs.reduce((s, i) => s + atoms[i].z, 0) / idxs.length,
-  }));
-
-  // Place centroids symmetrically on X axis, centred at origin
-  const n = fragList.length;
-  const newAtomLines = [...atomLines];
-  fragList.forEach((idxs, fi) => {
-    const targetX = (fi - (n - 1) / 2) * ION_DIST;
-    const dx = targetX - centroids[fi].x;
-    const dy = 0 - centroids[fi].y;
-    const dz = 0 - centroids[fi].z;
-    idxs.forEach(i => {
-      const a = atoms[i];
-      const nx = (a.x + dx).toFixed(4).padStart(10);
-      const ny = (a.y + dy).toFixed(4).padStart(10);
-      const nz = (a.z + dz).toFixed(4).padStart(10);
-      newAtomLines[i] = `${nx}${ny}${nz}${a.rest}`;
-    });
-  });
-
-  return [
-    ...lines.slice(0, 4),
-    ...newAtomLines,
-    ...lines.slice(4 + atomCount),
-  ].join('\n');
-}
-
-async function do3D(query, tk) {
-  // Wait for viewer to be ready (Firefox initialises it slower than Chrome).
-  // Poll for up to 3 s before giving up and falling back to 2D.
-  if (!viewer) {
-    await new Promise(resolve => {
-      if (viewer) return resolve();
-      const deadline = Date.now() + 3000;
-      const poll = () => {
-        if (viewer) return resolve();
-        if (Date.now() > deadline) return resolve(); // timed out — resolve anyway
-        setTimeout(poll, 50);
-      };
-      poll();
-    });
+/* Search DB for a free-text query */
+function searchDB(query) {
+  if (!DB) return null;
+  const q = query.toLowerCase().trim();
+  for (const arr of Object.values(DB)) {
+    const m = arr.find(m =>
+      m.n.toLowerCase().includes(q) ||
+      m.pname.toLowerCase().includes(q) ||
+      (m.f && m.f.includes(query))
+    );
+    if (m) return m;
   }
+  return null;
+}
 
-  if (!dmol || !viewer) {
-    toast('3D unavailable — switching to 2D', 'e');
-    setMode('2d');
-    return;  // load2D already called in parallel by go()
-  }
-  showLoad(true, query, 'LOADING 3D ANATOMY…');
-  let sdf = await cactus(query, 'SDF?get3d=true');
+/* ════════════════════════════════════════
+   3D RENDER — Three.js GLTFLoader
+   Loads GLB from GitHub Releases URL.
+   Replaces 3Dmol SDF/Cactus pipeline.
+════════════════════════════════════════ */
+async function do3D(meta, tk) {
+  if (!meta || !meta.glb) throw new Error('No GLB URL for this organ');
+
+  showLoad(true, meta.n, 'LOADING 3D MODEL…');
+
+  // Wait for Three.js to be available (deferred scripts)
+  await waitForThree();
   if (tk !== token) return;
 
-  // ── Ionic compound detection & repair ──────────────────────────────────
-  // Step 1: merge multi-record SDF ($$$$-separated) into one molblock
-  sdf = mergeSdfRecords(sdf);
-  // Step 2: detect disconnected graph
-  const { disconnected, atomCount, bondCount } = parseSdfConnectivity(sdf);
-  let isIonic = false;
-  if (disconnected) {
-    console.log(`[AnatomySphere 3D] Ionic SDF for "${query}" — atoms:${atomCount} bonds:${bondCount}`);
-    // Step 3: reposition fragments at realistic ionic distance
-    sdf = rebuildIonicSdf(sdf);
-    isIonic = true;
-    toast('Ionic compound — showing ion pair', 'k');
-  }
-  // ───────────────────────────────────────────────────────────────────────
+  // Init renderer if first load
+  if (!threeRenderer) initThreeViewer();
 
-  viewer.stopAnimate();
-  viewer.clear();
-  model = viewer.addModel(sdf, 'sdf');
-
-  if (isIonic) {
-    applyIonicStyle();
-  } else {
-    applyStyle();
+  // Remove previous organ
+  if (threeOrgan) {
+    threeScene.remove(threeOrgan);
+    threeOrgan = null;
   }
 
-  viewer.zoomTo();
-  viewer.zoom(0.75);
-  viewer.render();
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      meta.glb,
+      (gltf) => {
+        if (tk !== token) return resolve();
+        threeOrgan = gltf.scene;
 
-  requestAnimationFrame(() => {
-    viewer.resize();
-    viewer.render();
-    ROT.attachListeners();
-    ROT.paused = false;
-    ROT.start();
-    setTimeout(() => { viewer.resize(); viewer.render(); }, 400);
+        // Centre and scale the model
+        const box    = new THREE.Box3().setFromObject(threeOrgan);
+        const centre = box.getCenter(new THREE.Vector3());
+        const size   = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale  = 2.5 / maxDim;
+        threeOrgan.scale.setScalar(scale);
+        threeOrgan.position.sub(centre.multiplyScalar(scale));
+
+        // Apply organ-appropriate material enhancement
+        threeOrgan.traverse(child => {
+          if (child.isMesh) {
+            child.material.roughness   = 0.6;
+            child.material.metalness   = 0.1;
+            child.castShadow    = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        threeScene.add(threeOrgan);
+
+        // Reset camera
+        threeCamera.position.set(0, 0, 4);
+        threeControls.reset();
+        threeControls.update();
+
+        // Start ROT loop
+        ROT.paused = false;
+        ROT.start();
+
+        resolve();
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          const pct = Math.round(progress.loaded / progress.total * 100);
+          showLoad(true, meta.n, `LOADING 3D MODEL… ${pct}%`);
+        }
+      },
+      (err) => {
+        console.error('[AnatomySphere 3D] GLTFLoader error:', err);
+        reject(new Error('GLB load failed'));
+      }
+    );
   });
 }
 
-/* ════════════════════════════════════════
-   2D SVG — SmilesDrawer v2.x
-   ─────────────────────────────────────
-   ROOT CAUSE OF ORIGINAL BUG (fixed here):
-   The previous code used SmilesDrawer v2.x but called the v1 API:
-     SmilesDrawer.parse(smiles, successCb, errorCb)   ← v1 callback style
-   In v2, parse() is Promise-based and ignores callback arguments entirely.
-   The inner Promise therefore never resolved → catch block fired → "unavailable".
+function waitForThree() {
+  return new Promise(resolve => {
+    if (typeof THREE !== 'undefined' && THREE.GLTFLoader) return resolve();
+    const deadline = Date.now() + 5000;
+    const poll = () => {
+      if (typeof THREE !== 'undefined' && THREE.GLTFLoader) return resolve();
+      if (Date.now() > deadline) return resolve();
+      setTimeout(poll, 50);
+    };
+    poll();
+  });
+}
 
-   FIX — two-part:
-   1. Use SmilesDrawer.SmiDrawer (v2 high-level class) which accepts a raw
-      SMILES string directly, no separate parse() step needed.
-   2. Embed a SMILES lookup table for all 43 DB molecules so no Cactus
-      round-trip is needed for known molecules (eliminates CORS/mobile fetch
-      failures as a secondary failure path). Unknown searched molecules still
-      fall back to Cactus.
-════════════════════════════════════════ */
+function initThreeViewer() {
+  const container = document.getElementById('c3d');
+  const W = container.clientWidth  || window.innerWidth  - 300;
+  const H = container.clientHeight || window.innerHeight - 56;
 
-/* ── Embedded SMILES for all DB molecules ──────────────────────────────── */
-const SMILES_DB = {
-  /* Only molecules SmilesDrawer renders correctly (multi-atom, standard valence) */
-  'carbon dioxide':           'O=C=O',
-  'boron trifluoride':        'FB(F)F',
-  'benzene':                  'c1ccccc1',
-  'ethanol':                  'CCO',
-  'acetone':                  'CC(=O)C',
-  'acetic acid':              'CC(=O)O',
-  'formaldehyde':             'C=O',
-  'glucose':                  'OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O',
-  'adenine':                  'Nc1ncnc2[nH]cnc12',
-  'cholesterol':              'CC(C)CCCC(C)[C@H]1CC[C@@H]2[C@@H]1CC=C3C[C@@H](O)CC[C@]23C',
-  'alanine':                  'C[C@H](N)C(=O)O',
-  'sulfuric acid':            'OS(=O)(=O)O',
-  'nitric acid':              'O[N+](=O)[O-]',
-  'phosphoric acid':          'OP(=O)(O)O',
-  'nitrogen trifluoride':     'FN(F)F',
-  'oxygen difluoride':        'FOF',
-  'sulfur dioxide':           'O=S=O',
-  'sulfur trioxide':          'O=S(=O)=O',
-  'hydrogen peroxide':        'OO',
-  'nitrous oxide':            '[N-]=[N+]=O',
-  'carbonic acid':            'OC(=O)O',
-  'ethene':                   'C=C',
-  'ethyne':                   'C#C',
-  'urea':                     'NC(=O)N',
+  // Scene
+  threeScene = new THREE.Scene();
+  threeScene.background = new THREE.Color(0x060810);
+
+  // Camera
+  threeCamera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+  threeCamera.position.set(0, 0, 4);
+
+  // Renderer
+  threeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  threeRenderer.setSize(W, H);
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  threeRenderer.shadowMap.enabled = true;
+  threeRenderer.outputEncoding = THREE.sRGBEncoding;
+  container.appendChild(threeRenderer.domElement);
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+  threeScene.add(ambient);
+  const key = new THREE.DirectionalLight(0xffffff, 1.2);
+  key.position.set(3, 5, 3);
+  key.castShadow = true;
+  threeScene.add(key);
+  const fill = new THREE.DirectionalLight(0x8899ff, 0.4);
+  fill.position.set(-3, -2, -2);
+  threeScene.add(fill);
+  const rim = new THREE.DirectionalLight(0x00e5b4, 0.25);
+  rim.position.set(0, -3, -3);
+  threeScene.add(rim);
+
+  // OrbitControls
+  threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+  threeControls.enableDamping = true;
+  threeControls.dampingFactor = 0.08;
+  threeControls.minDistance   = 1;
+  threeControls.maxDistance   = 10;
+
+  // Pause ROT on user interaction
+  threeControls.addEventListener('start', () => ROT.onInteract());
+
+  // Render loop
+  function animate() {
+    threeAnimId = requestAnimationFrame(animate);
+    threeControls.update();
+    threeRenderer.render(threeScene, threeCamera);
+  }
+  animate();
+
+  // Resize observer
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+      const vw = document.getElementById('vw');
+      const W2 = vw.clientWidth, H2 = vw.clientHeight;
+      if (W2 < 10 || H2 < 10) return;
+      threeCamera.aspect = W2 / H2;
+      threeCamera.updateProjectionMatrix();
+      threeRenderer.setSize(W2, H2);
+    }).observe(document.getElementById('vw'));
+  }
+
+  window._viewerReady = true;
+  console.log('[AnatomySphere] Three.js viewer initialised');
+}
+
+/* Override ROT to use Three.js rotate instead of 3Dmol */
+const ROT = {
+  rafId:       null,
+  paused:      false,
+  resumeTimer: null,
+  RESUME_MS:   2500,
+  STEP_NORMAL: 0.003,
+  STEP_PMODE:  0.0015,
+  STEP_MOBILE: 0.002,
+
+  step() {
+    if (typeof pmodeOn !== 'undefined' && pmodeOn) return this.STEP_PMODE;
+    if (window.innerWidth < 768) return this.STEP_MOBILE;
+    return this.STEP_NORMAL;
+  },
+
+  start() {
+    if (!rotating) return;
+    this.stop();
+    const tick = () => {
+      if (!this.paused && threeOrgan && rotating && curMode === '3d') {
+        threeOrgan.rotation.y += this.step();
+      }
+      this.rafId = requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
+  },
+
+  stop() {
+    if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+  },
+
+  onInteract() {
+    if (!rotating) return;
+    this.paused = true;
+    clearTimeout(this.resumeTimer);
+    this.resumeTimer = setTimeout(() => { this.paused = false; }, this.RESUME_MS);
+  },
+
+  attachListeners() { /* handled by OrbitControls */ },
 };
 
-/* ── Static SVG for all molecules SmilesDrawer cannot render correctly ───
-   Covers: (1) hypervalent/noble-gas atoms, (2) single-atom molecules,
-   (3) diatomics with no bond graph, (4) exotic bonding (diborane).
-   Structure labels match NCERT anatomy content exactly.
-─────────────────────────────────────────────────────────────────────────── */
-const STATIC_SVG = (() => {
-  /* Palette */
-  const Cw = '#dde8ff';   // C / white-ish centre
-  const Fg = '#00e5b4';   // F, Cl
-  const Xp = '#aaaaff';   // Xe, noble gas
-  const Be = '#ffaa44';   // Be, B
-  const Pw = '#ff9944';   // P, S (warm)
-  const Hw = '#5a6e96';   // H, lone pairs, labels
-  const Nb = '#4a8fff';   // N, bonds
-  const bd = '#4a8fff';   // bond colour
+/* Stub out old 3Dmol functions so existing callers don't throw */
+function applyStyle()      { /* Three.js — style via material properties */ }
+function applyIonicStyle() { /* not applicable to anatomy organs */ }
+function togRot() {
+  rotating = document.getElementById('rot').checked;
+  if (rotating) { ROT.paused = false; ROT.start(); }
+  else { ROT.stop(); }
+}
+function resetV() {
+  if (!threeControls) return;
+  ROT.onInteract();
+  threeControls.reset();
+  threeCamera.position.set(0, 0, 4);
+}
+function zoomV(f) {
+  if (!threeCamera) return;
+  ROT.onInteract();
+  threeCamera.position.z = Math.max(1, Math.min(10, threeCamera.position.z / f));
+}
 
-  const cx=250, cy=185;   // canvas centre
 
-  /* ── Helpers ── */
-  const svg = body =>
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 360"
-          style="width:100%;height:auto;display:block">
-       <style>.lbl{font-family:'JetBrains Mono',monospace;font-weight:700;
-         text-anchor:middle;dominant-baseline:central}
-         line{stroke-width:2.5;stroke-linecap:round}</style>
-       ${body}
-     </svg>`;
+/* ════════════════════════════════════════
+   ANATOMY DIAGRAM SYSTEM
+   Replaces SMILES_DB + SmilesDrawer + STATIC_SVG.
+   Each organ has a hand-crafted schematic SVG
+   in the same dark-palette style as ChemSphere.
+════════════════════════════════════════ */
+const ANATOMY_SVG = (() => {
+  const bg   = 'transparent';
+  const bd   = '#4a8fff';   // border / structure lines
+  const red  = '#ff6b6b';   // oxygenated blood / arteries
+  const blue = '#5a8fff';   // deoxygenated / veins
+  const teal = '#00e5b4';   // labels / highlights
+  const gold = '#ffd700';   // special structures
+  const dim  = '#5a6e96';   // dim text
+  const wht  = '#dde8ff';   // white-ish tissue
 
-  const atom = (x,y,col,sym,r=22) =>
-    `<circle cx="${x}" cy="${y}" r="${r}" fill="${col}" fill-opacity="0.15"
-             stroke="${col}" stroke-width="1.5"/>
-     <text x="${x}" y="${y}" class="lbl" font-size="17" fill="${col}">${sym}</text>`;
+  const wrap = (body, vw=500, vh=380) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}"
+          style="width:100%;height:auto;display:block;background:${bg}">
+       <style>
+         .lbl{font-family:'JetBrains Mono',monospace;font-weight:700;
+           text-anchor:middle;dominant-baseline:central}
+         .dim{font-family:'JetBrains Mono',monospace;font-size:10px;
+           fill:${dim};text-anchor:middle;dominant-baseline:central}
+       </style>${body}</svg>`;
 
-  const bond = (x1,y1,x2,y2,col=bd) =>
-    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}"/>`;
+  const label = (x,y,txt,col=teal,fs=11) =>
+    `<text x="${x}" y="${y}" class="lbl" font-size="${fs}" fill="${col}">${txt}</text>`;
 
-  const dbl = (x1,y1,x2,y2,col=bd) => {
-    const dx=y2-y1, dy=x1-x2, len=Math.hypot(dx,dy)||1, ox=dx/len*3, oy=dy/len*3;
-    return `<line x1="${x1-ox}" y1="${y1-oy}" x2="${x2-ox}" y2="${y2-oy}" stroke="${col}"/>
-            <line x1="${x1+ox}" y1="${y1+oy}" x2="${x2+ox}" y2="${y2+oy}" stroke="${col}"/>`;
-  };
+  const note = (x,y,txt) =>
+    `<text x="${x}" y="${y}" class="dim">${txt}</text>`;
 
-  const lp = (x,y,col=Hw) =>
-    `<circle cx="${x-4}" cy="${y}" r="2.5" fill="${col}"/>
-     <circle cx="${x+4}" cy="${y}" r="2.5" fill="${col}"/>`;
-
-  const geo = txt =>
-    `<text x="${cx}" y="340" class="lbl" font-size="11" fill="${Hw}">${txt}</text>`;
-
-  /* ── Single atoms / diatomics ── */
-
-  const singleAtom = (col, sym, formula, label) => svg(`
-    ${atom(cx,cy,col,sym,32)}
-    <text x="${cx}" y="${cy+55}" class="lbl" font-size="13" fill="${Hw}">${formula}</text>
-    ${geo(label)}
+  /* ── HEART cross-section ─────────────────────────────────── */
+  const heart = wrap(`
+    <!-- outer heart shape -->
+    <ellipse cx="250" cy="195" rx="130" ry="140" fill="${red}" fill-opacity="0.08" stroke="${red}" stroke-width="2"/>
+    <!-- septum -->
+    <line x1="250" y1="80" x2="250" y2="320" stroke="${wht}" stroke-width="2.5" stroke-dasharray="6,3"/>
+    <!-- RA -->
+    <ellipse cx="175" cy="145" rx="60" ry="55" fill="${blue}" fill-opacity="0.18" stroke="${blue}" stroke-width="1.5"/>
+    ${label(175,145,'RA',blue,12)}
+    <!-- LA -->
+    <ellipse cx="325" cy="145" rx="60" ry="55" fill="${red}" fill-opacity="0.18" stroke="${red}" stroke-width="1.5"/>
+    ${label(325,145,'LA',red,12)}
+    <!-- RV -->
+    <ellipse cx="185" cy="255" rx="65" ry="60" fill="${blue}" fill-opacity="0.22" stroke="${blue}" stroke-width="1.5"/>
+    ${label(185,255,'RV',blue,12)}
+    <!-- LV -->
+    <ellipse cx="315" cy="255" rx="65" ry="65" fill="${red}" fill-opacity="0.22" stroke="${red}" stroke-width="2"/>
+    ${label(315,255,'LV',red,13)}
+    <!-- valves -->
+    ${label(250,195,'Valves',gold,10)}
+    <!-- labels -->
+    ${note(250,355,'4-chambered heart · RA/LA = atria · RV/LV = ventricles')}
+    ${note(250,368,'LV wall thickest — pumps to systemic circulation')}
   `);
 
-  const diatomic = (col1,sym1,col2,sym2,formula,label,dblBond=false) => svg(`
-    ${dblBond ? dbl(cx-60,cy,cx+60,cy) : bond(cx-60,cy,cx+60,cy)}
-    ${atom(cx-72,cy,col1,sym1)} ${atom(cx+72,cy,col2,sym2)}
-    <text x="${cx}" y="${cy+55}" class="lbl" font-size="13" fill="${Hw}">${formula}</text>
-    ${geo(label)}
+  /* ── BRAIN lateral view ──────────────────────────────────── */
+  const brain = wrap(`
+    <!-- cerebrum -->
+    <ellipse cx="230" cy="175" rx="175" ry="135" fill="${bd}" fill-opacity="0.1" stroke="${bd}" stroke-width="2"/>
+    <!-- gyri suggestion -->
+    <path d="M100,160 Q140,130 180,160 Q220,130 260,160 Q300,130 340,160 Q380,130 400,160"
+          fill="none" stroke="${bd}" stroke-width="1.5" opacity="0.5"/>
+    <path d="M110,195 Q150,165 190,195 Q230,165 270,195 Q310,165 350,195"
+          fill="none" stroke="${bd}" stroke-width="1.5" opacity="0.5"/>
+    <!-- cerebellum -->
+    <ellipse cx="370" cy="275" rx="80" ry="60" fill="${teal}" fill-opacity="0.12" stroke="${teal}" stroke-width="1.5"/>
+    ${label(370,275,'Cerebellum',teal,11)}
+    <!-- brainstem -->
+    <rect x="300" y="280" width="50" height="65" rx="12"
+          fill="${gold}" fill-opacity="0.15" stroke="${gold}" stroke-width="1.5"/>
+    ${label(325,315,'Brain-\nstem',gold,10)}
+    <!-- labels -->
+    ${label(200,175,'Cerebrum',wht,13)}
+    ${label(200,200,'(Forebrain)',dim,10)}
+    <!-- hypothalamus -->
+    <circle cx="270" cy="245" r="18" fill="${red}" fill-opacity="0.2" stroke="${red}" stroke-width="1.2"/>
+    ${label(270,245,'Hypo-\nthalamus',red,9)}
+    ${note(250,358,'Cerebrum 85% · Cerebellum = balance · Brainstem = vital functions')}
+    ${note(250,371,'Hypothalamus = thermostat of body · NEET high yield')}
+  `);
+
+  /* ── KIDNEY nephron schematic ────────────────────────────── */
+  const kidney = wrap(`
+    <!-- outer kidney shape -->
+    <path d="M180,60 Q90,60 80,190 Q70,310 180,320 Q250,330 280,280 Q240,270 230,190 Q220,110 280,100 Q250,55 180,60 Z"
+          fill="${red}" fill-opacity="0.08" stroke="${red}" stroke-width="2"/>
+    <!-- cortex label -->
+    ${label(130,100,'Cortex',teal,11)}
+    <!-- medulla -->
+    <ellipse cx="190" cy="195" rx="65" ry="90" fill="${blue}" fill-opacity="0.12" stroke="${blue}" stroke-width="1.2"/>
+    ${label(190,195,'Medulla',blue,11)}
+    <!-- renal pelvis -->
+    <ellipse cx="240" cy="195" rx="35" ry="45" fill="${gold}" fill-opacity="0.18" stroke="${gold}" stroke-width="1.2"/>
+    ${label(240,195,'Pelvis',gold,10)}
+    <!-- ureter -->
+    <line x1="265" y1="215" x2="300" y2="320" stroke="${gold}" stroke-width="2.5"/>
+    ${label(315,330,'Ureter',gold,10)}
+    <!-- nephron hint -->
+    <circle cx="130" cy="160" r="14" fill="${teal}" fill-opacity="0.2" stroke="${teal}" stroke-width="1.2"/>
+    ${label(130,160,'Neph-\nron',teal,9)}
+    ${note(250,358,'~1 million nephrons · Cortex = glomeruli + PCT/DCT')}
+    ${note(250,371,'Medulla = Loop of Henle · Pelvis → ureter → bladder')}
+  `);
+
+  /* ── LUNGS schematic ─────────────────────────────────────── */
+  const lungs = wrap(`
+    <!-- right lung (3 lobes) -->
+    <ellipse cx="145" cy="195" rx="110" ry="145" fill="${blue}" fill-opacity="0.12" stroke="${blue}" stroke-width="2"/>
+    <line x1="80" y1="155" x2="210" y2="165" stroke="${blue}" stroke-width="1" stroke-dasharray="5,3"/>
+    <line x1="75" y1="210" x2="205" y2="220" stroke="${blue}" stroke-width="1" stroke-dasharray="5,3"/>
+    ${label(145,120,'Superior',blue,10)}
+    ${label(145,190,'Middle',blue,10)}
+    ${label(145,255,'Inferior',blue,10)}
+    ${label(145,330,'Right Lung',blue,12)}
+    ${note(145,345,'3 Lobes')}
+    <!-- left lung (2 lobes) -->
+    <path d="M280,60 Q360,55 390,120 Q415,180 400,260 Q380,330 310,340 Q270,345 265,290 Q270,270 280,240 Q290,180 285,130 Z"
+          fill="${red}" fill-opacity="0.12" stroke="${red}" stroke-width="2"/>
+    <line x1="268" y1="195" x2="398" y2="205" stroke="${red}" stroke-width="1" stroke-dasharray="5,3"/>
+    ${label(340,135,'Superior',red,10)}
+    ${label(340,265,'Inferior',red,10)}
+    ${label(340,330,'Left Lung',red,12)}
+    ${note(340,345,'2 Lobes')}
+    <!-- trachea -->
+    <rect x="228" y="30" width="24" height="70" rx="8" fill="${wht}" fill-opacity="0.15" stroke="${wht}" stroke-width="1.5"/>
+    ${label(240,20,'Trachea',wht,10)}
+    <!-- cardiac notch -->
+    ${label(285,215,'Cardiac\nNotch',gold,9)}
+    ${note(250,370,'Alveoli surface area ~70m² · Gas exchange: O₂ in CO₂ out')}
+  `);
+
+  /* ── LIVER schematic ─────────────────────────────────────── */
+  const liver = wrap(`
+    <!-- main liver mass -->
+    <path d="M80,120 Q80,60 200,55 Q350,50 420,120 Q440,200 380,280 Q320,330 220,320 Q130,310 90,260 Q70,210 80,120 Z"
+          fill="${gold}" fill-opacity="0.1" stroke="${gold}" stroke-width="2"/>
+    <!-- right lobe -->
+    <ellipse cx="290" cy="180" rx="110" ry="100" fill="${gold}" fill-opacity="0.12" stroke="${gold}" stroke-width="1.2"/>
+    ${label(290,165,'Right Lobe',gold,12)}
+    ${label(290,183,'(Largest)',dim,9)}
+    <!-- left lobe -->
+    <ellipse cx="155" cy="185" rx="70" ry="80" fill="${gold}" fill-opacity="0.1" stroke="${gold}" stroke-width="1.2"/>
+    ${label(155,185,'Left\nLobe',gold,11)}
+    <!-- bile duct -->
+    <line x1="250" y1="290" x2="250" y2="350" stroke="${teal}" stroke-width="2.5"/>
+    <ellipse cx="250" cy="355" rx="30" ry="12" fill="${teal}" fill-opacity="0.2" stroke="${teal}" stroke-width="1.2"/>
+    ${label(250,355,'Bile Duct',teal,10)}
+    <!-- portal vein label -->
+    ${label(370,285,'Portal\nVein →',red,10)}
+    ${note(250,372,'Largest gland · Bile · Detox · Glycogen · Urea synthesis')}
+  `);
+
+  /* ── PANCREAS schematic ──────────────────────────────────── */
+  const pancreas = wrap(`
+    <!-- pancreas shape -->
+    <path d="M80,175 Q100,155 160,162 Q220,168 280,158 Q340,148 400,175 Q420,190 400,210 Q340,225 280,215 Q220,208 160,215 Q100,222 80,205 Z"
+          fill="${wht}" fill-opacity="0.1" stroke="${wht}" stroke-width="2"/>
+    <!-- head -->
+    <ellipse cx="115" cy="190" rx="42" ry="35" fill="${red}" fill-opacity="0.18" stroke="${red}" stroke-width="1.5"/>
+    ${label(115,190,'Head',red,11)}
+    <!-- body -->
+    <ellipse cx="240" cy="187" rx="70" ry="28" fill="${blue}" fill-opacity="0.15" stroke="${blue}" stroke-width="1.2"/>
+    ${label(240,187,'Body',blue,11)}
+    <!-- tail -->
+    <ellipse cx="372" cy="183" rx="45" ry="25" fill="${teal}" fill-opacity="0.18" stroke="${teal}" stroke-width="1.5"/>
+    ${label(372,183,'Tail',teal,11)}
+    <!-- islets -->
+    <circle cx="240" cy="240" r="20" fill="${gold}" fill-opacity="0.25" stroke="${gold}" stroke-width="1.5"/>
+    ${label(240,240,'Islets of\nLangerhans',gold,9)}
+    <line x1="240" y1="215" x2="240" y2="220" stroke="${gold}" stroke-width="1.2" stroke-dasharray="3,2"/>
+    <!-- duct -->
+    <line x1="115" y1="225" x2="115" y2="300" stroke="${red}" stroke-width="2"/>
+    ${label(115,315,'Pancreatic\nDuct',red,9)}
+    ${note(250,358,'Exocrine: acinar cells → digestive enzymes')}
+    ${note(250,371,'Endocrine: α=glucagon β=insulin · Islets of Langerhans')}
+  `);
+
+  /* ── LARGE INTESTINE schematic ───────────────────────────── */
+  const largeIntestine = wrap(`
+    <!-- ascending colon -->
+    <rect x="90" y="100" width="55" height="180" rx="20"
+          fill="${gold}" fill-opacity="0.12" stroke="${gold}" stroke-width="1.8"/>
+    ${label(117,190,'Ascending\nColon',gold,9)}
+    <!-- transverse colon -->
+    <rect x="90" y="90" width="310" height="55" rx="20"
+          fill="${teal}" fill-opacity="0.12" stroke="${teal}" stroke-width="1.8"/>
+    ${label(245,117,'Transverse Colon',teal,10)}
+    <!-- descending colon -->
+    <rect x="355" y="100" width="55" height="180" rx="20"
+          fill="${blue}" fill-opacity="0.12" stroke="${blue}" stroke-width="1.8"/>
+    ${label(382,190,'Descending\nColon',blue,9)}
+    <!-- sigmoid -->
+    <path d="M355,270 Q340,320 310,330 Q270,340 250,320" fill="none" stroke="${red}" stroke-width="2"/>
+    ${label(310,340,'Sigmoid',red,10)}
+    <!-- caecum + appendix -->
+    <ellipse cx="117" cy="300" rx="28" ry="22" fill="${red}" fill-opacity="0.18" stroke="${red}" stroke-width="1.2"/>
+    ${label(117,300,'Caecum',red,9)}
+    <line x1="117" y1="322" x2="117" y2="355" stroke="${wht}" stroke-width="2"/>
+    ${label(117,362,'Appendix',wht,9)}
+    <!-- rectum -->
+    <rect x="220" y="300" width="40" height="50" rx="10"
+          fill="${dim}" fill-opacity="0.2" stroke="${dim}" stroke-width="1.2"/>
+    ${label(240,325,'Rectum',dim,9)}
+    ${note(250,378,'Absorbs water · No enzymes · Appendix = vestigial lymphoid organ')}
+  `);
+
+  /* ── SMALL INTESTINE schematic ───────────────────────────── */
+  const smallIntestine = wrap(`
+    <!-- coiled loops suggestion -->
+    <path d="M180,80 Q300,80 310,130 Q320,180 200,190 Q100,200 110,250 Q120,300 240,305 Q360,310 370,260 Q380,210 270,200"
+          fill="none" stroke="${teal}" stroke-width="3" opacity="0.7"/>
+    <!-- duodenum -->
+    <path d="M180,80 Q160,80 150,110 Q140,145 170,160 Q200,175 220,160"
+          fill="none" stroke="${red}" stroke-width="3"/>
+    ${label(148,120,'Duodenum\n(25 cm)',red,9)}
+    <!-- villi close-up inset -->
+    <rect x="330" y="70" width="130" height="100" rx="8"
+          fill="${bg}" stroke="${dim}" stroke-width="1" stroke-dasharray="4,2"/>
+    ${label(395,82,'Villus (×)',wht,9)}
+    <line x1="395" y1="93" x2="395" y2="160" stroke="${wht}" stroke-width="1.5"/>
+    <ellipse cx="395" cy="165" rx="18" ry="8" fill="${teal}" fill-opacity="0.2" stroke="${teal}" stroke-width="1"/>
+    ${label(395,165,'Lacteal',teal,8)}
+    <!-- labels -->
+    ${label(240,280,'Jejunum',teal,10)}
+    ${label(340,200,'Ileum',blue,10)}
+    ${note(250,355,'~6–7 m long · Villi + microvilli = 200 m² absorption area')}
+    ${note(250,368,'Duodenum: bile + pancreatic juice · Ileum: Vit B12 + bile salts')}
+  `);
+
+  /* ── SPLEEN schematic ────────────────────────────────────── */
+  const spleen = wrap(`
+    <!-- outer shape -->
+    <path d="M160,80 Q280,70 320,140 Q360,210 320,285 Q280,340 170,330 Q100,320 90,250 Q75,170 100,120 Q120,85 160,80 Z"
+          fill="${red}" fill-opacity="0.1" stroke="${red}" stroke-width="2"/>
+    <!-- red pulp -->
+    <ellipse cx="210" cy="205" rx="95" ry="105" fill="${red}" fill-opacity="0.15" stroke="${red}" stroke-width="1.2"/>
+    ${label(210,190,'Red Pulp',red,12)}
+    ${label(210,208,'(Filters Blood)',dim,9)}
+    <!-- white pulp -->
+    <ellipse cx="260" cy="175" rx="45" ry="40" fill="${wht}" fill-opacity="0.18" stroke="${wht}" stroke-width="1.2"/>
+    ${label(260,175,'White\nPulp',wht,10)}
+    ${label(260,198,'(Immune)',dim,9)}
+    <!-- hilum -->
+    <ellipse cx="310" cy="255" rx="22" ry="30" fill="${gold}" fill-opacity="0.2" stroke="${gold}" stroke-width="1.2"/>
+    ${label(310,255,'Hilum',gold,10)}
+    ${note(250,358,'Largest lymphoid organ · Destroys old RBCs (graveyard of RBCs)')}
+    ${note(250,371,'Red pulp = blood filter · White pulp = immune response')}
+  `);
+
+  /* ── URINARY BLADDER schematic ───────────────────────────── */
+  const bladder = wrap(`
+    <!-- bladder wall -->
+    <ellipse cx="250" cy="185" rx="130" ry="140" fill="${blue}" fill-opacity="0.1" stroke="${blue}" stroke-width="2.5"/>
+    <!-- detrusor label -->
+    ${label(250,100,'Detrusor\nMuscle',teal,11)}
+    <!-- trigone -->
+    <path d="M175,295 L250,320 L325,295 Z" fill="${gold}" fill-opacity="0.25" stroke="${gold}" stroke-width="1.8"/>
+    ${label(250,315,'Trigone',gold,10)}
+    <!-- ureters -->
+    <line x1="175" y1="295" x2="120" y2="200" stroke="${blue}" stroke-width="2.5"/>
+    <line x1="325" y1="295" x2="380" y2="200" stroke="${blue}" stroke-width="2.5"/>
+    ${label(100,185,'Ureter\n(L)',blue,10)}
+    ${label(400,185,'Ureter\n(R)',blue,10)}
+    <!-- urethra -->
+    <line x1="250" y1="325" x2="250" y2="370" stroke="${red}" stroke-width="2.5"/>
+    ${label(250,375,'Urethra',red,10)}
+    <!-- capacity -->
+    ${label(250,195,'400–600 mL',wht,12)}
+    ${note(250,358,'Detrusor = smooth muscle · Internal sphincter = involuntary')}
+    ${note(250,371,'External sphincter = voluntary · Micturition reflex: S2–S4')}
+  `);
+
+  /* ── SPINAL CORD cross-section ───────────────────────────── */
+  const spinalCord = wrap(`
+    <!-- white matter -->
+    <ellipse cx="250" cy="190" rx="130" ry="130" fill="${wht}" fill-opacity="0.08" stroke="${wht}" stroke-width="2"/>
+    ${label(250,95,'White Matter',wht,11)}
+    ${label(250,112,'(Myelinated axons)',dim,9)}
+    <!-- grey matter H-shape -->
+    <path d="M250,130 L250,250
+             M205,155 L295,155
+             M205,225 L295,225"
+          fill="none" stroke="${gold}" stroke-width="18" stroke-linecap="round" opacity="0.3"/>
+    <path d="M250,130 L250,250 M205,155 L295,155 M205,225 L295,225"
+          fill="none" stroke="${gold}" stroke-width="3" stroke-linecap="round"/>
+    ${label(250,190,'Grey\nMatter',gold,12)}
+    ${label(250,215,'(H-shape)',dim,9)}
+    <!-- dorsal horn -->
+    ${label(250,130,'Dorsal\nHorn',teal,9)}
+    <!-- ventral horn -->
+    ${label(250,252,'Ventral\nHorn',red,9)}
+    <!-- canal -->
+    <circle cx="250" cy="190" r="8" fill="${dim}" fill-opacity="0.4" stroke="${dim}" stroke-width="1"/>
+    ${label(290,190,'Central\nCanal',dim,9)}
+    ${note(250,358,'Grey matter = H-shaped · cell bodies · White matter = axons')}
+    ${note(250,371,'31 pairs of spinal nerves · Reflex arc bypasses brain')}
   `);
 
   return {
-
-    /* ── Single-atom / trivial molecules ─────────── */
-    'methane': svg(`
-      ${bond(cx,cy,cx,cy-80)} ${bond(cx,cy,cx,cy+80)}
-      ${bond(cx,cy,cx-80,cy)} ${bond(cx,cy,cx+80,cy)}
-      ${atom(cx,cy,Cw,'C',24)}
-      ${atom(cx,cy-92,Hw,'H',18)} ${atom(cx,cy+92,Hw,'H',18)}
-      ${atom(cx-92,cy,Hw,'H',18)} ${atom(cx+92,cy,Hw,'H',18)}
-      ${geo('Tetrahedral · sp³ · 109.5°')}
-    `),
-
-    'ammonia': svg(`
-      ${bond(cx,cy,cx,cy-85)}
-      ${bond(cx,cy,cx-74,cy+48)} ${bond(cx,cy,cx+74,cy+48)}
-      ${atom(cx,cy,Nb,'N',24)}
-      ${atom(cx,cy-97,Hw,'H',18)}
-      ${atom(cx-86,cy+56,Hw,'H',18)} ${atom(cx+86,cy+56,Hw,'H',18)}
-      ${lp(cx,cy-26)}
-      ${geo('Trigonal Pyramidal · sp³ · 107°')}
-    `),
-
-    'water': svg(`
-      ${bond(cx,cy,cx-70,cy+65)} ${bond(cx,cy,cx+70,cy+65)}
-      ${atom(cx,cy,'#ff6b6b','O',24)}
-      ${atom(cx-82,cy+75,Hw,'H',18)} ${atom(cx+82,cy+75,Hw,'H',18)}
-      ${lp(cx-18,cy-22)} ${lp(cx+18,cy-22)}
-      ${geo('Bent (V-shape) · sp³ · 104.5°')}
-    `),
-
-    'hydrogen fluoride': diatomic(Hw,'H',Fg,'F','H–F','Linear diatomic · sp³ · 180°'),
-    'hydrogen chloride': diatomic(Hw,'H',Fg,'Cl','H–Cl','Linear diatomic · sp³ · 180°'),
-    'phosphine': svg(`
-      ${bond(cx,cy,cx,cy-85)}
-      ${bond(cx,cy,cx-74,cy+48)} ${bond(cx,cy,cx+74,cy+48)}
-      ${atom(cx,cy,Pw,'P',24)}
-      ${atom(cx,cy-97,Hw,'H',18)}
-      ${atom(cx-86,cy+56,Hw,'H',18)} ${atom(cx+86,cy+56,Hw,'H',18)}
-      ${lp(cx,cy-26)}
-      ${geo('Trigonal Pyramidal · sp³ · 93.5°')}
-    `),
-
-    /* ── Hypervalent / noble-gas molecules ────────── */
-
-    'xenon tetrafluoride': svg(`
-      ${bond(cx,cy,cx,cy-90)} ${bond(cx,cy,cx,cy+90)}
-      ${bond(cx,cy,cx-90,cy)} ${bond(cx,cy,cx+90,cy)}
-      ${atom(cx,cy,Xp,'Xe',26)}
-      ${atom(cx,cy-102,Fg,'F')} ${atom(cx,cy+102,Fg,'F')}
-      ${atom(cx-102,cy,Fg,'F')} ${atom(cx+102,cy,Fg,'F')}
-      ${lp(cx-34,cy-10)} ${lp(cx+34,cy-10)}
-      ${geo('Square Planar · sp³d² · 90°')}
-    `),
-
-    'xenon difluoride': svg(`
-      ${bond(cx,cy,cx-110,cy)} ${bond(cx,cy,cx+110,cy)}
-      ${atom(cx,cy,Xp,'Xe',26)}
-      ${atom(cx-122,cy,Fg,'F')} ${atom(cx+122,cy,Fg,'F')}
-      ${lp(cx-6,cy-34)} ${lp(cx-6,cy+34)}
-      ${lp(cx+6,cy-34)} ${lp(cx+6,cy+34)}
-      ${geo('Linear · sp³d · 180°')}
-    `),
-
-    'sulfur hexafluoride': svg(`
-      ${bond(cx,cy,cx,cy-90)}   ${bond(cx,cy,cx,cy+90)}
-      ${bond(cx,cy,cx-90,cy)}   ${bond(cx,cy,cx+90,cy)}
-      ${bond(cx,cy,cx-55,cy-55)} ${bond(cx,cy,cx+55,cy+55)}
-      ${atom(cx,cy,'#ffd700','S',24)}
-      ${atom(cx,cy-102,Fg,'F')}  ${atom(cx,cy+102,Fg,'F')}
-      ${atom(cx-102,cy,Fg,'F')}  ${atom(cx+102,cy,Fg,'F')}
-      ${atom(cx-67,cy-67,Fg,'F')} ${atom(cx+67,cy+67,Fg,'F')}
-      ${geo('Octahedral · sp³d² · 90°')}
-    `),
-
-    'phosphorus pentachloride': svg(`
-      ${bond(cx,cy,cx,cy-90)}
-      ${bond(cx,cy,cx,cy+90)}
-      ${bond(cx,cy,cx-90,cy+26)}
-      ${bond(cx,cy,cx+90,cy+26)}
-      ${bond(cx,cy,cx,cy+52)}
-      ${atom(cx,cy,Pw,'P',24)}
-      ${atom(cx,cy-102,Fg,'Cl',26)}
-      ${atom(cx,cy+102,Fg,'Cl',26)}
-      ${atom(cx-104,cy+26,Fg,'Cl',26)}
-      ${atom(cx+104,cy+26,Fg,'Cl',26)}
-      ${atom(cx,cy+66,Fg,'Cl',26)}
-      ${geo('Trig. Bipyramidal · sp³d · 90°/120°')}
-    `),
-
-    'chlorine trifluoride': svg(`
-      ${bond(cx,cy,cx,cy-88)}
-      ${bond(cx,cy,cx,cy+88)}
-      ${bond(cx,cy,cx+88,cy)}
-      ${atom(cx,cy,Fg,'Cl',24)}
-      ${atom(cx,cy-100,Fg,'F')} ${atom(cx,cy+100,Fg,'F')}
-      ${atom(cx+100,cy,Fg,'F')}
-      ${lp(cx-30,cy-12)} ${lp(cx-30,cy+12)}
-      ${geo('T-shaped · sp³d · 87.5°')}
-    `),
-
-    'beryllium chloride': svg(`
-      ${bond(cx,cy,cx-110,cy)} ${bond(cx,cy,cx+110,cy)}
-      ${atom(cx,cy,Be,'Be',22)}
-      ${atom(cx-124,cy,Fg,'Cl',26)} ${atom(cx+124,cy,Fg,'Cl',26)}
-      ${geo('Linear · sp · 180°')}
-    `),
-
-    'diborane': (() => {
-      const B1x=cx-72, B2x=cx+72, By=cy;
-      const Hbx=cx, Hb1y=cy-50, Hb2y=cy+50;
-      return svg(`
-        ${bond(B1x,By,Hbx,Hb1y)} ${bond(B2x,By,Hbx,Hb1y)}
-        ${bond(B1x,By,Hbx,Hb2y)} ${bond(B2x,By,Hbx,Hb2y)}
-        ${bond(B1x,By,B1x-58,By-44)} ${bond(B1x,By,B1x-58,By+44)}
-        ${bond(B2x,By,B2x+58,By-44)} ${bond(B2x,By,B2x+58,By+44)}
-        ${atom(B1x,By,Be,'B',20)}   ${atom(B2x,By,Be,'B',20)}
-        ${atom(Hbx,Hb1y,Hw,'H',16)} ${atom(Hbx,Hb2y,Hw,'H',16)}
-        ${atom(B1x-68,By-50,Hw,'H',16)} ${atom(B1x-68,By+50,Hw,'H',16)}
-        ${atom(B2x+68,By-50,Hw,'H',16)} ${atom(B2x+68,By+50,Hw,'H',16)}
-        ${geo('3c-2e Banana bonds · sp³ B')}
-      `);
-    })(),
-
-    /* ── Tetrahedral halomethanes (SmilesDrawer fails on multi-Cl SMILES) ── */
-
-    'chloroform': (() => {
-      // CHCl3 — tetrahedral: H on top, 3 Cl in trigonal base
-      // 2D projection: C centre, H up, Cl at 210°/330°/90°+offset shown as wedge/dash
-      // Simplified flat projection: C centre, H at top, 3 Cl arranged below
-      const d = 92;
-      return svg(`
-        ${bond(cx, cy, cx, cy-d)}
-        ${bond(cx, cy, cx-d*0.87, cy+d*0.5)}
-        ${bond(cx, cy, cx+d*0.87, cy+d*0.5)}
-        ${bond(cx, cy, cx, cy+d*0.4)}
-        ${atom(cx, cy, Cw, 'C', 22)}
-        ${atom(cx, cy-d-12, Hw, 'H', 18)}
-        ${atom(cx-d*0.87-14, cy+d*0.5, Fg, 'Cl', 24)}
-        ${atom(cx+d*0.87+14, cy+d*0.5, Fg, 'Cl', 24)}
-        ${atom(cx, cy+d*0.4+28, Fg, 'Cl', 24)}
-        ${geo('Tetrahedral · sp³ · 109.5°')}
-      `);
-    })(),
-
-    'carbon tetrachloride': (() => {
-      // CCl4 — tetrahedral: C centre, 4 Cl
-      const d = 95;
-      return svg(`
-        ${bond(cx, cy, cx, cy-d)}
-        ${bond(cx, cy, cx-d*0.87, cy+d*0.5)}
-        ${bond(cx, cy, cx+d*0.87, cy+d*0.5)}
-        ${bond(cx, cy, cx, cy+d*0.55)}
-        ${atom(cx, cy, Cw, 'C', 22)}
-        ${atom(cx, cy-d-14, Fg, 'Cl', 24)}
-        ${atom(cx-d*0.87-14, cy+d*0.5, Fg, 'Cl', 24)}
-        ${atom(cx+d*0.87+14, cy+d*0.5, Fg, 'Cl', 24)}
-        ${atom(cx, cy+d*0.55+28, Fg, 'Cl', 24)}
-        ${geo('Tetrahedral · sp³ · 109.5°')}
-      `);
-    })(),
-
-    'phosphorus trichloride': svg(`
-      ${bond(cx,cy,cx,cy-88)}
-      ${bond(cx,cy,cx-76,cy+50)} ${bond(cx,cy,cx+76,cy+50)}
-      ${atom(cx,cy,Pw,'P',24)}
-      ${atom(cx,cy-102,Fg,'Cl',24)}
-      ${atom(cx-90,cy+60,Fg,'Cl',24)} ${atom(cx+90,cy+60,Fg,'Cl',24)}
-      ${lp(cx,cy-26)}
-      ${geo('Trigonal Pyramidal · sp³ · 100°')}
-    `),
-
-    /* ── Radical / resonance molecules ────────────────────────────────── */
-
-    'nitrogen dioxide': svg(`
-      ${bond(cx,cy,cx-80,cy+55,bd,true)}
-      ${bond(cx,cy,cx+80,cy+55,bd,false)}
-      ${atom(cx,cy,Nb,'N',24)}
-      ${atom(cx-93,cy+65,'#ff6b6b','O',22)}
-      ${atom(cx+93,cy+65,'#ff6b6b','O',22)}
-      ${lp(cx-4,cy-30)}
-      <text x="${cx+10}" y="${cy-36}" font-family="'JetBrains Mono',monospace"
-            font-size="13" fill="#5a6e96" dominant-baseline="central">•</text>
-      ${geo('Bent · sp² · 134° · radical')}
-    `),
-
-    'ozone': svg(`
-      ${bond(cx,cy,cx-80,cy+55,bd,true)}
-      ${bond(cx,cy,cx+80,cy+55,bd,false)}
-      ${atom(cx,cy,'#ff6b6b','O',24)}
-      ${atom(cx-93,cy+65,'#ff6b6b','O',22)}
-      ${atom(cx+93,cy+65,'#ff6b6b','O',22)}
-      ${lp(cx-6,cy-28)} ${lp(cx+22,cy-10)}
-      ${geo('Bent · sp² · 117° · resonance')}
-    `),
-
+    'circ-heart':          heart,
+    'nerv-brain':          brain,
+    'excr-kidney-left':    kidney,
+    'excr-kidney-right':   kidney,
+    'resp-lungs':          lungs,
+    'dige-liver':          liver,
+    'dige-pancreas':       pancreas,
+    'dige-large-intestine': largeIntestine,
+    'dige-small-intestine': smallIntestine,
+    'circ-spleen':         spleen,
+    'excr-bladder':        bladder,
+    'nerv-spinal':         spinalCord,
   };
 })();
 
-/* ── Generic ionic 2D renderer ─────────────────────────────────────────────
-   Intercepts disconnected SMILES (containing '.') BEFORE SmilesDrawer sees them.
-   Parses each fragment's atom symbol and charge, renders as styled ion labels
-   in AnatomySphere's dark palette with proper charge superscripts.
-   Works for any ionic compound: NaOH, NaCl, KBr, MgO, CaCO3, etc.
-─────────────────────────────────────────────────────────────────────────── */
-function renderIonicSvg(smiles) {
-  // Parse each fragment from dot-separated SMILES
-  const fragments = smiles.split('.').map(f => f.trim()).filter(Boolean);
+
+/* ════════════════════════════════════════
+   2D PANEL — Anatomy Diagram Viewer
+   Shows ANATOMY_SVG schematic for the organ.
+   Keeps zoom, pinch, and label infrastructure.
+════════════════════════════════════════ */
+const _sdZoom = { scale: 1, min: 0.5, max: 3.0, step: 0.25 };
+
+function _sdApplyZoom() {
+  const wrap = document.getElementById('sd-wrap');
+  if (!wrap) return;
+  wrap.style.transform       = `scale(${_sdZoom.scale})`;
+  wrap.style.transformOrigin = 'center top';
+  document.getElementById('sd-zreset').textContent =
+    _sdZoom.scale === 1 ? '1:1' : Math.round(_sdZoom.scale * 100) + '%';
+}
+
+function _sdZoomBy(delta) {
+  _sdZoom.scale = Math.min(_sdZoom.max, Math.max(_sdZoom.min, _sdZoom.scale + delta));
+  _sdApplyZoom();
+}
+
+function _sdInitZoomButtons() {
+  const zi = document.getElementById('sd-zin');
+  const zo = document.getElementById('sd-zout');
+  const zr = document.getElementById('sd-zreset');
+  if (zi && !zi._sdWired) {
+    zi.addEventListener('click', () => _sdZoomBy(+_sdZoom.step));
+    zo.addEventListener('click', () => _sdZoomBy(-_sdZoom.step));
+    zr.addEventListener('click', () => { _sdZoom.scale = 1; _sdApplyZoom(); });
+    zi._sdWired = true;
+  }
+}
+
+function _sdInitPinch() {
+  const frame = document.getElementById('f2d');
+  if (!frame || frame._sdPinch) return;
+  let initDist = null, initScale = 1;
+  frame.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      initDist  = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                             e.touches[0].clientY - e.touches[1].clientY);
+      initScale = _sdZoom.scale;
+    }
+  }, { passive: true });
+  frame.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && initDist) {
+      e.preventDefault();
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                              e.touches[0].clientY - e.touches[1].clientY);
+      _sdZoom.scale = Math.min(_sdZoom.max,
+                     Math.max(_sdZoom.min, initScale * (dist / initDist)));
+      _sdApplyZoom();
+    }
+  }, { passive: false });
+  frame.addEventListener('touchend', () => { initDist = null; }, { passive: true });
+  frame._sdPinch = true;
+}
+
+async function load2D(meta) {
+  const frame = document.getElementById('f2d');
+  const sp    = document.getElementById('sp2');
+  const lbl   = document.getElementById('l2d');
+
+  // Clear previous content
+  frame.querySelectorAll('.sd-static, .sd-err').forEach(el => el.remove());
+  let wrap = document.getElementById('sd-wrap');
+  if (wrap) wrap.remove();
+
+  frame.classList.remove('rdy');
+  sp.style.display  = 'block';
+  lbl.textContent   = 'Loading diagram…';
+  _sdZoom.scale     = 1;
+  _sdInitZoomButtons();
+
+  const key = meta ? (meta.key || meta._key) : null;
+  const svg = key ? ANATOMY_SVG[key] : null;
+
+  if (svg) {
+    const wrapDiv = document.createElement('div');
+    wrapDiv.id        = 'sd-wrap';
+    wrapDiv.className = 'sd-static';
+    wrapDiv.style.cssText = 'width:100%;padding:8px;box-sizing:border-box;transform-origin:center top';
+    wrapDiv.innerHTML = svg;
+    frame.insertBefore(wrapDiv, frame.firstChild);
+    frame.classList.add('rdy');
+    sp.style.display = 'none';
+    lbl.textContent  = `${meta.n} · Anatomy Diagram`;
+    _sdApplyZoom();
+    _sdInitPinch();
+  } else {
+    sp.style.display = 'none';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'sd-err';
+    errDiv.innerHTML = `<span>⬡</span>Diagram for <strong>${meta ? meta.n : 'this organ'}</strong> coming soon.<br>Use the 3D viewer to explore.`;
+    frame.appendChild(errDiv);
+    frame.classList.add('rdy');
+    lbl.textContent = 'Diagram coming soon';
+  }
+}
 
   // Extract atom symbol and charge from a SMILES fragment
   function parseFragment(frag) {
@@ -3187,247 +3190,36 @@ function renderIonicSvg(smiles) {
           fill="#5a6e96" text-anchor="middle">Ionic compound · electrostatic attraction</text>
   </svg>`;
 }
-const SD_OPTIONS = {
-  width:           500,
-  height:          380,
-  bondThickness:   1.6,
-  fontSizeLarge:   8,
-  fontSizeSmall:   6,
-  shortBondLength: 0.85,
-  bondLength:      30,
-  themes: {
-    dark: {
-      C:          '#dde8ff',
-      O:          '#ff6b6b',
-      N:          '#4a8fff',
-      F:          '#00e5b4',
-      CL:         '#00e5b4',
-      BR:         '#ff9944',
-      I:          '#aa44ff',
-      P:          '#ff9944',
-      S:          '#ffd700',
-      B:          '#ffaa44',
-      SI:         '#aaaaff',
-      H:          '#5a6e96',
-      BACKGROUND: 'transparent',
-    }
-  }
-};
-
-/* ── SMILES / SVG resolution ────────────────────────────────────────────
-   Priority: 1) static SVG (hypervalent molecules), 2) SMILES_DB,
-             3) session cache, 4) Cactus API fallback
-─────────────────────────────────────────────────────────────────────────── */
-const _smilesCache = new Map();
-
-function resolveStatic(query) {
-  return STATIC_SVG[query.toLowerCase().trim()] || null;
-}
-
-async function resolveSmiles(query) {
-  const key = query.toLowerCase().trim();
-  if (SMILES_DB[key]) {
-    console.log(`[AnatomySphere 2D] SMILES from DB for "${query}":`, SMILES_DB[key]);
-    return SMILES_DB[key];
-  }
-  if (_smilesCache.has(query)) {
-    console.log(`[AnatomySphere 2D] SMILES from cache for "${query}":`, _smilesCache.get(query));
-    return _smilesCache.get(query);
-  }
-  console.log(`[AnatomySphere 2D] Fetching SMILES from Cactus for "${query}"…`);
-  const smiles = await cactus(query, 'smiles');
-  console.log(`[AnatomySphere 2D] Cactus returned SMILES for "${query}":`, smiles);
-  _smilesCache.set(query, smiles);
-  return smiles;
-}
-
-/* ── Core render — SmilesDrawer v2 SmiDrawer API ────────────────────────
-   Uses SmilesDrawer.SmiDrawer (high-level v2 class).
-   draw() accepts a raw SMILES string and returns a Promise.
-─────────────────────────────────────────────────────────────────────────── */
-async function _sdRender(smiles, canvasEl) {
-  console.log(`[AnatomySphere 2D] Rendering SMILES:`, smiles);
-  if (typeof SmilesDrawer === 'undefined') throw new Error('SmilesDrawer not loaded');
-  if (!canvasEl.id) canvasEl.id = 'sd-canvas';
-  const sd = new SmilesDrawer.SmiDrawer(SD_OPTIONS);
-  await sd.draw(smiles, '#' + canvasEl.id, 'dark', false);
-  console.log(`[AnatomySphere 2D] Render SUCCESS for:`, smiles);
-}
-
-/* ── Zoom state ─────────────────────────────────────────────────────────── */
-const _sdZoom = { scale: 1, min: 0.5, max: 3.0, step: 0.25 };
-
-function _sdApplyZoom() {
-  const c = document.getElementById('sd-canvas');
-  if (!c) return;
-  c.style.transform       = `scale(${_sdZoom.scale})`;
-  c.style.transformOrigin = 'center center';
-  const natural = c.offsetHeight / _sdZoom.scale;
-  c.parentElement.style.height =
-    Math.min(natural * _sdZoom.scale, window.innerHeight * 0.65) + 'px';
-  document.getElementById('sd-zreset').textContent =
-    _sdZoom.scale === 1 ? '1:1' : Math.round(_sdZoom.scale * 100) + '%';
-}
-
-function _sdZoomBy(delta) {
-  _sdZoom.scale = Math.min(_sdZoom.max, Math.max(_sdZoom.min, _sdZoom.scale + delta));
-  _sdApplyZoom();
-}
-
-function _sdInitZoomButtons() {
-  const zi = document.getElementById('sd-zin');
-  const zo = document.getElementById('sd-zout');
-  const zr = document.getElementById('sd-zreset');
-  if (zi && !zi._sdWired) {
-    zi.addEventListener('click', () => _sdZoomBy(+_sdZoom.step));
-    zo.addEventListener('click', () => _sdZoomBy(-_sdZoom.step));
-    zr.addEventListener('click', () => { _sdZoom.scale = 1; _sdApplyZoom(); });
-    zi._sdWired = true;
-  }
-}
-
-function _sdInitPinch() {
-  const canvas = document.getElementById('sd-canvas');
-  if (!canvas || canvas._sdPinch) return;
-  let initDist = null, initScale = 1;
-  canvas.addEventListener('touchstart', e => {
-    if (e.touches.length === 2) {
-      initDist  = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
-                             e.touches[0].clientY - e.touches[1].clientY);
-      initScale = _sdZoom.scale;
-    }
-  }, { passive: true });
-  canvas.addEventListener('touchmove', e => {
-    if (e.touches.length === 2 && initDist) {
-      e.preventDefault();
-      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
-                              e.touches[0].clientY - e.touches[1].clientY);
-      _sdZoom.scale = Math.min(_sdZoom.max,
-                     Math.max(_sdZoom.min, initScale * (dist / initDist)));
-      _sdApplyZoom();
-    }
-  }, { passive: false });
-  canvas.addEventListener('touchend', () => { initDist = null; }, { passive: true });
-  canvas._sdPinch = true;
-}
-
-/* ── Main entry point called by go() ────────────────────────────────────── */
-async function load2D(query) {
-  const frame  = document.getElementById('f2d');
-  const sp     = document.getElementById('sp2');
-  const lbl    = document.getElementById('l2d');
-  const canvas = document.getElementById('sd-canvas');
-
-  console.log(`[AnatomySphere 2D] load2D called for: "${query}"`);
-
-  // Reset UI — remove previous static SVG or error injections
-  frame.querySelectorAll('.sd-err, .sd-static').forEach(el => el.remove());
-  canvas.style.display = 'block';
-  frame.classList.remove('rdy');
-  frame.style.height = '';
-  sp.style.display   = 'block';
-  lbl.textContent    = 'Generating 2D diagram…';
-  _sdZoom.scale      = 1;
-
-  _sdInitZoomButtons();
-
-  try {
-    // ── PATH A: static SVG for hypervalent / noble-gas molecules ──────────
-    const staticSvg = resolveStatic(query);
-    if (staticSvg) {
-      console.log(`[AnatomySphere 2D] Using static SVG for "${query}"`);
-      // Hide the canvas, inject SVG div instead
-      canvas.style.display = 'none';
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const svgDiv = document.createElement('div');
-      svgDiv.className = 'sd-static';
-      svgDiv.style.cssText = 'width:100%;padding:12px;box-sizing:border-box';
-      svgDiv.innerHTML = staticSvg;
-      frame.insertBefore(svgDiv, frame.firstChild);
-      frame.classList.add('rdy');
-      sp.style.display = 'none';
-      lbl.textContent  = `${query} · 2D · SVG`;
-      _sdInitPinch();
-      console.log(`[AnatomySphere 2D] Static SVG render SUCCESS for "${query}"`);
-      return;
-    }
-
-    // ── PATH B: SmilesDrawer for standard-valence molecules ───────────────
-    canvas.style.display = 'block';
-    const smiles = await resolveSmiles(query);
-    if (!smiles || !smiles.trim()) throw new Error('Empty SMILES returned');
-
-    // ── PATH B1: Ionic intercept — dot-SMILES means disconnected fragments ─
-    // SmilesDrawer renders these as floating formula text (Na⁺  O⁻H).
-    // Instead show our ionic SVG with charge labels and electrostatic notation.
-    if (smiles.includes('.')) {
-      console.log(`[AnatomySphere 2D] Ionic SMILES detected for "${query}":`, smiles);
-      canvas.style.display = 'none';
-      const svgDiv = document.createElement('div');
-      svgDiv.className = 'sd-static';
-      svgDiv.style.cssText = 'width:100%;padding:12px;box-sizing:border-box';
-      svgDiv.innerHTML = renderIonicSvg(smiles);
-      frame.insertBefore(svgDiv, frame.firstChild);
-      frame.classList.add('rdy');
-      sp.style.display = 'none';
-      lbl.textContent  = `${query} · 2D · Ionic`;
-      _sdInitPinch();
-      console.log(`[AnatomySphere 2D] Ionic SVG render SUCCESS for "${query}"`);
-      return;
-    }
-
-    await _sdRender(smiles, canvas);
-    frame.classList.add('rdy');
-    sp.style.display = 'none';
-    lbl.textContent  = `${query} · 2D · SVG`;
-    _sdApplyZoom();
-    _sdInitPinch();
-
-  } catch (err) {
-    console.error(`[AnatomySphere 2D] FAILED for "${query}":`, err);
-    sp.style.display = 'none';
-    canvas.style.display = 'none';
-    const ctx = canvas.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const errDiv = document.createElement('div');
-    errDiv.className = 'sd-err';
-    errDiv.innerHTML = `<span>⬡</span>2D diagram unavailable for <strong>${query}</strong>.<br>Try searching by organ name or body system.`;
-    frame.appendChild(errDiv);
-    frame.classList.add('rdy');
-    lbl.textContent = '2D diagram unavailable';
-  }
-}
 
 /* ════════════════════════════════════════
-   PROPERTIES
+   PROPERTIES PANEL — anatomy fields
 ════════════════════════════════════════ */
-async function loadProps(query, meta) {
-  document.getElementById('prt').textContent = meta ? meta.n : query;
-  document.getElementById('prg').innerHTML   = '<div style="font-family:var(--fn);font-size:10px;color:var(--di);padding:8px">Fetching…</div>';
+async function loadProps(meta) {
+  if (!meta) return;
+  document.getElementById('prt').textContent = meta.n;
 
   const fields = [
-    {label:'Molecular Formula',  key:'formula'},
-    {label:'Molecular Weight',   key:'mw'},
-    {label:'IUPAC Name',         key:'iupac_name'},
-    {label:'SMILES',             key:'smiles'},
-    {label:'InChIKey',           key:'stdinchikey'},
-    {label:'LogP (est.)',        key:'xlogp2'},
-    {label:'H-Bond Donors',      key:'h_bond_donor_count'},
-    {label:'H-Bond Acceptors',   key:'h_bond_acceptor_count'},
-    {label:'Rotatable Bonds',    key:'rotatable_bond_count'},
-    {label:'Heavy Atom Count',   key:'heavy_atom_count'},
+    { label: 'Common Name',      val: meta.n },
+    { label: 'Hindi Name',       val: meta.f || '—' },
+    { label: 'Body System',      val: systemLabel(meta.key) },
+    { label: 'Structure Type',   val: meta.s || '—' },
+    { label: 'Average Weight',   val: meta.w || '—' },
+    { label: 'Key Function',     val: meta.h || '—' },
+    { label: 'Location',         val: meta.a || '—' },
+    { label: 'Dimensions',       val: meta.d || '—' },
+    { label: 'Annotation Zones', val: meta.as3d ? `${meta.as3d} named structures` : '—' },
+    { label: 'HRA Source',       val: 'HuBMAP Human Reference Atlas v2.4' },
+    { label: 'License',          val: 'CC BY 4.0 — humanatlas.io' },
+    { label: 'NEET Exam Fact',   val: meta.x || '—' },
   ];
 
-  const results = await Promise.allSettled(fields.map(f => cactus(query, f.key)));
-
-  document.getElementById('prg').innerHTML = fields.map((f, i) => {
-    const val      = results[i].status === 'fulfilled' ? results[i].value : '—';
-    const small    = val.length > 25;
-    const tiny     = val.length > 40;
-    const fs       = tiny ? '11px' : small ? '13px' : '16px';
-    const copyable = ['SMILES','InChIKey','IUPAC Name'].includes(f.label) && val !== '—';
-    const safe     = val.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  document.getElementById('prg').innerHTML = fields.map(f => {
+    const val   = f.val || '—';
+    const small = val.length > 30;
+    const tiny  = val.length > 60;
+    const fs    = tiny ? '11px' : small ? '13px' : '15px';
+    const copyable = ['Common Name','Hindi Name','NEET Exam Fact'].includes(f.label) && val !== '—';
+    const safe  = val.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<div class="prc">
       <div class="prcl">${f.label}</div>
       <div class="prcv" style="font-size:${fs}">${val}</div>
@@ -3436,25 +3228,16 @@ async function loadProps(query, meta) {
   }).join('');
 }
 
-/* ════════════════════════════════════════
-   LIVE META (for searched molecules)
-════════════════════════════════════════ */
-async function liveMeta(query, iupac) {
-  try {
-    const [formula, mw] = await Promise.all([
-      cactus(query, 'formula').catch(() => '—'),
-      cactus(query, 'mw').catch(() => '—'),
-    ]);
-    fillInfo({
-      n: iupac || query,
-      f: formula.replace(/([0-9]+)/g, '<sub>$1</sub>'),
-      w: mw, h: '—', a: '—', d: '—',
-      g: 'Identify the organ, its body system, and its primary function.',
-      x: 'Search powered by NCI Cactus. For exam details refer to NCERT.',
-    });
-  } catch {
-    fillInfo({ n: query, f: '—', w: '—', h: '—', a: '—', d: '—', g: '—', x: '—' });
-  }
+function systemLabel(key) {
+  if (!key) return '—';
+  if (key.startsWith('circ'))  return 'Circulatory System';
+  if (key.startsWith('nerv'))  return 'Nervous System';
+  if (key.startsWith('resp'))  return 'Respiratory System';
+  if (key.startsWith('dige'))  return 'Digestive System';
+  if (key.startsWith('excr'))  return 'Excretory System';
+  if (key.startsWith('repr'))  return 'Reproductive System';
+  if (key.startsWith('endo'))  return 'Endocrine System';
+  return '—';
 }
 
 /* ════════════════════════════════════════
@@ -3463,7 +3246,7 @@ async function liveMeta(query, iupac) {
 function fillInfo(m) {
   document.getElementById('i-nm').textContent = m.n;
   document.getElementById('i-fm').innerHTML   = m.f;
-  document.getElementById('i-wt').textContent = (m.w && m.w !== '—') ? (String(m.w).includes('g/mol') ? m.w : m.w + ' g/mol') : '—';
+  document.getElementById('i-wt').textContent = m.w || '—';
   document.getElementById('i-hy').textContent = m.h;
   document.getElementById('i-an').textContent = m.a;
   document.getElementById('i-dp').textContent = m.d;
