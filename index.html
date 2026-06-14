@@ -11,9 +11,29 @@ window.onerror = function(msg, src, line, col, err){
   alert("AnatomySphere Error:\n" + msg);
 };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE_CORE from 'three';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/controls/OrbitControls.js';
+
+// Build a global THREE namespace combining core + addons,
+// so the rest of the app (written for the old global-script API)
+// can keep using THREE.Scene, THREE.GLTFLoader, THREE.OrbitControls, etc.
+const THREE = Object.assign({}, THREE_CORE);
+THREE.GLTFLoader   = GLTFLoader;
+THREE.OrbitControls = OrbitControls;
+window.THREE = THREE;
+window._threeReady = true;
+console.log('[AnatomySphere] THREE module loaded. GLTFLoader:', typeof THREE.GLTFLoader, '| OrbitControls:', typeof THREE.OrbitControls);
+window.dispatchEvent(new Event('three-ready'));
+</script>
 <style>
 /* ─── TOKENS ─────────────────────────────────────────── */
 :root {
@@ -1672,7 +1692,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <div class="sl">Chapter</div>
       <div class="ctbs" id="ctbs">
         <button class="ctb on" data-cat="circulatory" onclick="pickCat('circulatory',this)">Circulatory</button>
-        <button class="ctb"    data-cat="nervous"   onclick="pickCat('organic',this)">Nervous</button>
+        <button class="ctb"    data-cat="nervous"   onclick="pickCat('nervous',this)">Nervous</button>
         <button class="ctb"    data-cat="excretory"  onclick="pickCat('excretory',this)">Excretory</button>
         <button class="ctb"    data-cat="digestive"    onclick="pickCat('digestive',this)">Digestive</button>
         <button class="ctb"    data-cat="respiratory" onclick="pickCat('respiratory',this)">Respiratory</button>
@@ -1917,7 +1937,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <!-- Category filter pills -->
   <div class="pnd-cats" id="pnd-cats">
     <button class="pnd-cat on" data-cat="circulatory" onclick="pndSetCat('circulatory',this)">Circulatory</button>
-    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('organic',this)">Nervous</button>
+    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('nervous',this)">Nervous</button>
     <button class="pnd-cat"    data-cat="excretory"  onclick="pndSetCat('excretory',this)">Excretory</button>
     <button class="pnd-cat"    data-cat="digestive"    onclick="pndSetCat('digestive',this)">Digestive</button>
     <button class="pnd-cat"    data-cat="respiratory" onclick="pndSetCat('respiratory',this)">Respiratory</button>
@@ -1949,7 +1969,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <!-- Categories -->
   <div class="ms-cats">
     <button class="ms-cat on" data-cat="circulatory" onclick="msCat('circulatory',this)">Circulatory</button>
-    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('organic',this)">Nervous</button>
+    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('nervous',this)">Nervous</button>
     <button class="ms-cat"    data-cat="excretory"  onclick="msCat('excretory',this)">Excretory</button>
     <button class="ms-cat"    data-cat="digestive"    onclick="msCat('digestive',this)">Digestive</button>
     <button class="ms-cat"    data-cat="respiratory" onclick="msCat('respiratory',this)">Respiratory</button>
@@ -2123,11 +2143,16 @@ window.addEventListener('load', async () => {
 function initLibStatus() {
   document.getElementById('ldr').classList.add('h');
   const ls = document.getElementById('libst');
-  // Three.js loads deferred — check after short delay
-  setTimeout(() => {
-    const threeOk = typeof THREE !== 'undefined';
+  const render = () => {
+    const threeOk = window._threeReady && typeof THREE !== 'undefined' && !!THREE.GLTFLoader;
     ls.innerHTML = `<span class="${threeOk ? 'lok' : 'lfl'}">${threeOk ? '✓' : '✗'} Three.js GLTFLoader</span><span class="lok">✓ Anatomy SVG diagrams</span>`;
-  }, 800);
+  };
+  if (window._threeReady) {
+    render();
+  } else {
+    window.addEventListener('three-ready', render, { once: true });
+    setTimeout(render, 3000); // fallback in case module load is slow/failed
+  }
   window._viewerReady = true;
 }
 
@@ -2571,14 +2596,11 @@ async function do3D(meta, tk) {
 
 function waitForThree() {
   return new Promise(resolve => {
-    if (typeof THREE !== 'undefined' && THREE.GLTFLoader) return resolve();
-    const deadline = Date.now() + 5000;
-    const poll = () => {
-      if (typeof THREE !== 'undefined' && THREE.GLTFLoader) return resolve();
-      if (Date.now() > deadline) return resolve();
-      setTimeout(poll, 50);
-    };
-    poll();
+    if (window._threeReady && typeof THREE !== 'undefined' && THREE.GLTFLoader) return resolve();
+    const onReady = () => { window.removeEventListener('three-ready', onReady); resolve(); };
+    window.addEventListener('three-ready', onReady);
+    // Fallback timeout in case the module ever fails to load/execute
+    setTimeout(() => { window.removeEventListener('three-ready', onReady); resolve(); }, 8000);
   });
 }
 
@@ -2604,7 +2626,7 @@ function initThreeViewer() {
   threeRenderer.setSize(W, H);
   threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   threeRenderer.shadowMap.enabled = true;
-  threeRenderer.outputEncoding = THREE.sRGBEncoding;
+  threeRenderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(threeRenderer.domElement);
 
   // Lights
@@ -4494,7 +4516,7 @@ window.csGetFallbackInfo = csGetFallbackInfo;
       <div class="hub-filter" id="hub-filter">
         <button class="filt-btn on" data-cat="all"       onclick="qzPickFilt('all',this)">All Topics</button>
         <button class="filt-btn"    data-cat="circulatory" onclick="qzPickFilt('circulatory',this)">Circulatory</button>
-        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('organic',this)">Nervous</button>
+        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('nervous',this)">Nervous</button>
         <button class="filt-btn"    data-cat="excretory"  onclick="qzPickFilt('excretory',this)">Excretory</button>
         <button class="filt-btn"    data-cat="digestive"    onclick="qzPickFilt('digestive',this)">Digestive</button>
         <button class="filt-btn"    data-cat="respiratory" onclick="qzPickFilt('respiratory',this)">Respiratory</button>
