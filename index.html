@@ -11,9 +11,9 @@ window.onerror = function(msg, src, line, col, err){
   alert("AnatomySphere Error:\n" + msg);
 };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js" async></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js" async></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
 <style>
 /* ─── TOKENS ─────────────────────────────────────────── */
 :root {
@@ -2469,6 +2469,11 @@ async function do3D(meta, tk) {
   // Wait for Three.js to be available (deferred scripts)
   await waitForThree();
   if (tk !== token) return;
+
+  if (typeof THREE === 'undefined' || !THREE.GLTFLoader) {
+    console.error('[AnatomySphere 3D] THREE or THREE.GLTFLoader unavailable after wait. THREE:', typeof THREE, '| GLTFLoader:', typeof THREE !== 'undefined' ? typeof THREE.GLTFLoader : 'n/a');
+    throw new Error('3D engine failed to load (THREE.GLTFLoader unavailable)');
+  }
 
   // Init renderer if first load
   if (!threeRenderer) initThreeViewer();
@@ -5219,12 +5224,5 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
-
-<script 
-src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>
-eruda.init();
-</script>
-
 </body>
 </html>
