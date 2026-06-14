@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Load Test</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#0f0;font-family:monospace;font-size:14px}
+  #log{position:fixed;top:0;left:0;right:0;background:#000;color:#0f0;padding:8px;z-index:10;max-height:50vh;overflow:auto;white-space:pre-wrap}
+  #c{position:fixed;top:50vh;left:0;right:0;bottom:0}
+</style>
+</head>
+<body>
+<div id="log">Loading...\n</div>
+<div id="c"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+const logEl = document.getElementById('log');
+function log(...args) {
+  const s = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  logEl.textContent += s + '\n';
+  console.log(...args);
+}
+
+window.onerror = function(msg, src, line, col, err) {
+  log('GLOBAL ERROR:', msg, 'at', line + ':' + col);
+};
+
+log('typeof THREE =', typeof THREE);
+log('typeof THREE.GLTFLoader =', typeof THREE !== 'undefined' ? typeof THREE.GLTFLoader : 'n/a');
+log('typeof THREE.OrbitControls =', typeof THREE !== 'undefined' ? typeof THREE.OrbitControls : 'n/a');
+
+const container = document.getElementById('c');
+const W = container.clientWidth || window.innerWidth;
+const H = container.clientHeight || (window.innerHeight / 2);
+log('container size:', W, H);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222233);
+
+const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+camera.position.set(0, 0, 4);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(W, H);
+container.appendChild(renderer.domElement);
+
+const ambient = new THREE.AmbientLight(0xffffff, 1.0);
+scene.add(ambient);
+
+let controls;
+try {
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  log('OrbitControls created OK');
+} catch (e) {
+  log('OrbitControls ERROR:', e.message);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (controls) controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+const GLB_URL = 'heart.glb'; // relative — must be served from same repo root
+
+log('Starting GLTFLoader.load:', GLB_URL);
+
+try {
+  const loader = new THREE.GLTFLoader();
+  log('GLTFLoader instance created');
+  loader.load(
+    GLB_URL,
+    (gltf) => {
+      log('SUCCESS: gltf loaded');
+      let meshCount = 0;
+      gltf.scene.traverse(o => { if (o.isMesh) meshCount++; });
+      log('mesh count:', meshCount);
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = box.getSize(new THREE.Vector3());
+      log('bbox size:', size.x, size.y, size.z);
+      scene.add(gltf.scene);
+      log('added to scene. children:', scene.children.length);
+    },
+    (xhr) => {
+      if (xhr.total) {
+        log('progress:', Math.round(xhr.loaded / xhr.total * 100) + '%');
+      } else {
+        log('progress (no total):', xhr.loaded, 'bytes');
+      }
+    },
+    (err) => {
+      log('LOAD ERROR:', err.message || JSON.stringify(err));
+    }
+  );
+} catch (e) {
+  log('GLTFLoader CONSTRUCTOR ERROR:', e.message);
+}
+</script>
+</body>
+</html>
