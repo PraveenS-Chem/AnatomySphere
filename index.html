@@ -2215,7 +2215,7 @@ function msCat(cat, btn) {
 }
 
 function msRenderGrid(cat) {
-  const mols = DB[cat] || [];
+  const mols = (DB && DB[cat]) || [];
   document.getElementById('ms-grid').innerHTML = mols.map(m =>
     `<div class="ms-card${m.key === selKey ? ' sel':''}" data-key="${m.key}">
       <div class="ms-cf">${m.n}</div>
@@ -2264,7 +2264,7 @@ function pickCat(cat, btn) {
   renderGrid(cat);
 }
 function renderGrid(cat) {
-  const mols = DB[cat] || [];
+  const mols = (DB && DB[cat]) || [];
   document.getElementById('mg').innerHTML = mols.map(m =>
     `<div class="mc${m.key === selKey ? ' sel' : ''}" data-key="${m.key}">
       <div class="mcf">${m.n}</div>
@@ -2352,7 +2352,7 @@ function setMode(mode) {
    LOAD MOLECULES
 ════════════════════════════════════════ */
 function findMeta(key) {
-  for (const arr of Object.values(DB)) {
+  for (const arr of Object.values(DB || {})) {
     const m = arr.find(m => m.key === key);
     if (m) return m;
   }
@@ -3965,7 +3965,9 @@ function pndRender(cat) {
 
   // Collect molecules: 'all' flattens every category
   let mols;
-  if (cat === 'all') {
+  if (!DB) {
+    mols = [];
+  } else if (cat === 'all') {
     mols = Object.values(DB).flat();
   } else {
     mols = DB[cat] || [];
@@ -5217,11 +5219,5 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>
-eruda.init();
-</script>
-
 </body>
 </html>
