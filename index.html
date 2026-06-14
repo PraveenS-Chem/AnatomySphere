@@ -2518,8 +2518,10 @@ async function do3D(meta, tk) {
         threeOrgan = gltf.scene;
 
         let meshCount = 0;
-        threeOrgan.traverse(c => { if (c.isMesh) meshCount++; });
+        const meshNames = [];
+        threeOrgan.traverse(c => { if (c.isMesh) { meshCount++; meshNames.push(c.name || '(unnamed)'); } });
         console.log('[AnatomySphere 3D] GLB loaded:', meta.glb, '| meshes:', meshCount);
+        console.log('[AnatomySphere 3D] mesh names:', meshNames);
 
         // Centre and scale the model
         const box    = new THREE.Box3().setFromObject(threeOrgan);
@@ -2534,7 +2536,9 @@ async function do3D(meta, tk) {
           return;
         }
 
-        const scale  = 2.5 / maxDim;
+        const isMobile = window.innerWidth < 768;
+        const targetSize = isMobile ? 1.6 : 2.5;
+        const scale  = targetSize / maxDim;
         threeOrgan.scale.setScalar(scale);
         threeOrgan.position.sub(centre.multiplyScalar(scale));
         console.log('[AnatomySphere 3D] applied scale:', scale, '| position:', threeOrgan.position);
@@ -2553,7 +2557,8 @@ async function do3D(meta, tk) {
         console.log('[AnatomySphere 3D] organ added to scene. Scene children:', threeScene.children.length);
 
         // Reset camera
-        threeCamera.position.set(0, 0, 4);
+        const camDist = isMobile ? 5.5 : 4;
+        threeCamera.position.set(0, 0, camDist);
         threeControls.reset();
         threeControls.update();
         console.log('[AnatomySphere 3D] camera position:', threeCamera.position, '| aspect:', threeCamera.aspect);
@@ -2648,7 +2653,7 @@ function initThreeViewer() {
   threeControls.enableDamping = true;
   threeControls.dampingFactor = 0.08;
   threeControls.minDistance   = 1;
-  threeControls.maxDistance   = 10;
+  threeControls.maxDistance   = 15;
 
   // Pause ROT on user interaction
   threeControls.addEventListener('start', () => ROT.onInteract());
