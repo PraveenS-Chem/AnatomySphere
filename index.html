@@ -920,6 +920,32 @@ body.pmode #pmode-exit-hint { display: block; bottom: 110px }
   #atom-legend { bottom:116px }
 }
 
+/* ─── 3D PART-TAP INFO CARD ──────────────────────────── */
+#part-info-card {
+  position:absolute;bottom:14px;left:14px;right:14px;z-index:16;
+  background:rgba(8,12,22,.97);
+  border:1px solid var(--tea);border-radius:12px;
+  padding:13px 15px;max-width:340px;
+  display:none;
+  animation:eduIn .25s cubic-bezier(.34,1.56,.64,1);
+}
+#part-info-card.v { display:block }
+#part-info-close {
+  position:absolute;top:8px;right:10px;
+  background:none;border:none;color:var(--mu);
+  font-size:14px;line-height:1;cursor:pointer;padding:4px;
+}
+.pic-name { font-size:13px;font-weight:700;color:var(--tea);margin-bottom:6px;padding-right:24px;line-height:1.3 }
+.pic-row { display:flex;justify-content:space-between;gap:8px;margin-bottom:4px }
+.pic-label { font-family:var(--fn);font-size:9px;color:var(--di);letter-spacing:1px;text-transform:uppercase }
+.pic-val { font-family:var(--fn);font-size:10px;color:#fff;text-align:right }
+.pic-divider { height:1px;background:var(--bd);margin:7px 0 }
+.pic-fact { font-size:11px;color:var(--mu);line-height:1.6 }
+@media (max-width:767px) {
+  #part-info-card { left:10px;right:10px;bottom:10px;max-width:none;padding:11px 13px }
+  .pic-fact { font-size:10.5px }
+}
+
 /* ─── ONBOARDING HINTS ───────────────────────────────── */
 #hint-bar {
   position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:20;
@@ -1843,6 +1869,18 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <div class="edu-insight" id="edu-ins">—</div>
     </div>
 
+    <!-- ─── 3D PART-TAP INFO CARD ─── -->
+    <div id="part-info-card">
+      <button id="part-info-close" onclick="hidePartInfo()">✕</button>
+      <div class="pic-name" id="pic-name">—</div>
+      <div class="pic-row">
+        <span class="pic-label">Type</span>
+        <span class="pic-val" id="pic-type">—</span>
+      </div>
+      <div class="pic-divider"></div>
+      <div class="pic-fact" id="pic-fact">—</div>
+    </div>
+
     <!-- ─── ONBOARDING HINTS ─── -->
     <div id="hint-bar">
       <div class="hint-chip">⟳ Drag to rotate</div>
@@ -2312,6 +2350,7 @@ const MODE_MAP = {
 function setMode(mode) {
   curMode = mode;
   const is3d = mode === '3d';
+  if (!is3d) hidePartInfo();
 
   // Sync tab active states (desktop + mobile)
   Object.entries(MODE_MAP).forEach(([m, ids]) => {
@@ -2413,6 +2452,8 @@ function doSearch() {
 ════════════════════════════════════════ */
 let threeScene = null, threeCamera = null, threeRenderer = null;
 let threeControls = null, threeOrgan = null, threeAnimId = null;
+let threeRaycaster = null, threePointer = null;
+let highlightedMesh = null, highlightedOrigEmissive = null;
 
 /* ════════════════════════════════════════
    MAIN ORCHESTRATOR — anatomy GLB pipeline
@@ -2508,6 +2549,7 @@ async function do3D(meta, tk) {
     threeScene.remove(threeOrgan);
     threeOrgan = null;
   }
+  hidePartInfo();
 
   return new Promise((resolve, reject) => {
     const loader = new THREE.GLTFLoader();
@@ -2609,7 +2651,168 @@ function waitForThree() {
   });
 }
 
-function initThreeViewer() {
+/* ════════════════════════════════════════
+   3D PART FACTS — click-to-highlight
+   Keyed by GLB mesh names (VH_M_* convention
+   from HuBMAP Human Reference Atlas).
+   Add more organs' parts here as needed.
+════════════════════════════════════════ */
+const PART_FACTS = {
+  // Heart
+  VH_M_mitral_valve: {
+    name: 'Mitral Valve',
+    structure: 'Bicuspid Valve',
+    fact: 'Located between the left atrium and left ventricle. Has 2 cusps — the only bicuspid valve in the heart. Prevents backflow into the atrium during ventricular contraction.'
+  },
+  VH_M_tricuspid_valve: {
+    name: 'Tricuspid Valve',
+    structure: 'Atrioventricular Valve',
+    fact: 'Located between the right atrium and right ventricle. Has 3 cusps. Closes during ventricular systole to prevent blood flowing back into the right atrium.'
+  },
+  VH_M_aortic_valve: {
+    name: 'Aortic Valve',
+    structure: 'Semilunar Valve',
+    fact: 'Located between the left ventricle and the aorta. Opens during systole to allow oxygenated blood into systemic circulation, and prevents backflow during diastole.'
+  },
+  VH_M_pulmonary_valve: {
+    name: 'Pulmonary Valve',
+    structure: 'Semilunar Valve',
+    fact: 'Located between the right ventricle and the pulmonary artery. Allows deoxygenated blood to flow toward the lungs for gas exchange.'
+  },
+  VH_M_papillary_muscle_of_heart_anterior: {
+    name: 'Anterior Papillary Muscle',
+    structure: 'Papillary Muscle',
+    fact: 'Conical projections of ventricular myocardium. Attach to chordae tendineae, which anchor the AV valve leaflets and prevent them prolapsing into the atria during contraction.'
+  },
+  VH_M_papillary_muscle_of_heart_anterolateral: {
+    name: 'Anterolateral Papillary Muscle',
+    structure: 'Papillary Muscle',
+    fact: 'Part of the papillary muscle group anchoring the mitral valve via chordae tendineae, ensuring valve leaflets close properly under pressure.'
+  },
+  VH_M_papillary_muscle_of_heart_medial: {
+    name: 'Medial Papillary Muscle',
+    structure: 'Papillary Muscle',
+    fact: 'Supports the tricuspid/mitral valve leaflets via chordae tendineae, contracting in sync with the ventricular wall to keep valves taut during systole.'
+  },
+  VH_M_papillary_muscle_of_heart_posterior: {
+    name: 'Posterior Papillary Muscle',
+    structure: 'Papillary Muscle',
+    fact: 'One of the muscular pillars in the ventricle wall that tensions the chordae tendineae, preventing valve leaflets from inverting under high ventricular pressure.'
+  },
+  VH_M_papillary_muscle_of_heart_posteromedial: {
+    name: 'Posteromedial Papillary Muscle',
+    structure: 'Papillary Muscle',
+    fact: 'Anchors chordae tendineae to the mitral valve\u2019s posterior leaflet. Particularly vulnerable to ischaemia as it often has a single blood supply.'
+  },
+  VH_M_left_cardiac_atrium: {
+    name: 'Left Atrium',
+    structure: 'Receiving Chamber',
+    fact: 'Receives oxygenated blood from the pulmonary veins and pumps it into the left ventricle through the mitral valve. Has the thinnest walls of the four chambers.'
+  },
+  VH_M_right_cardiac_atrium: {
+    name: 'Right Atrium',
+    structure: 'Receiving Chamber',
+    fact: 'Receives deoxygenated blood from the superior and inferior vena cavae and the coronary sinus, then pumps it into the right ventricle via the tricuspid valve.'
+  },
+  VH_M_heart_right_ventricle: {
+    name: 'Right Ventricle',
+    structure: 'Pumping Chamber',
+    fact: 'Pumps deoxygenated blood through the pulmonary valve to the lungs via the pulmonary artery. Its wall is thinner than the left ventricle since it pumps against lower resistance.'
+  },
+  VH_M_interventricular_septum: {
+    name: 'Interventricular Septum',
+    structure: 'Muscular Wall',
+    fact: 'The thick muscular wall separating the left and right ventricles, preventing oxygenated and deoxygenated blood from mixing. Defects here cause VSD (ventricular septal defect).'
+  },
+  VH_M_heart_left_ventricle: {
+    name: 'Left Ventricle',
+    structure: 'Pumping Chamber',
+    fact: 'The heart\u2019s most muscular chamber — pumps oxygenated blood through the aortic valve to the entire body via the aorta. NEET fact: thickest wall of all 4 chambers.'
+  },
+};
+
+/** Convert a VH_M_* mesh name to a readable label as a fallback if not in PART_FACTS */
+function prettyPartName(meshName) {
+  return meshName
+    .replace(/^VH_M_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** Apply an emissive highlight to a mesh */
+function highlightMesh(mesh) {
+  if (highlightedMesh === mesh) return;
+  restoreHighlight();
+  if (!mesh.material) return;
+  highlightedMesh = mesh;
+  highlightedOrigEmissive = mesh.material.emissive ? mesh.material.emissive.clone() : null;
+  if (mesh.material.emissive) {
+    mesh.material.emissive.setHex(0x00e5b4);
+    mesh.material.emissiveIntensity = 0.6;
+  }
+}
+
+/** Remove highlight from the previously highlighted mesh */
+function restoreHighlight() {
+  if (highlightedMesh && highlightedMesh.material && highlightedOrigEmissive) {
+    highlightedMesh.material.emissive.copy(highlightedOrigEmissive);
+    highlightedMesh.material.emissiveIntensity = 1.0;
+  }
+  highlightedMesh = null;
+  highlightedOrigEmissive = null;
+}
+
+/** Show the part-info overlay with info about a tapped 3D part */
+function showPartInfo(meshName) {
+  const info = PART_FACTS[meshName];
+  const displayName = info ? info.name : prettyPartName(meshName);
+  const structure    = info ? info.structure : 'Anatomical Structure';
+  const fact         = info ? info.fact : 'No detailed info available for this structure yet — tap other highlighted regions to explore more.';
+
+  const card    = document.getElementById('part-info-card');
+  const nameEl  = document.getElementById('pic-name');
+  const typeEl  = document.getElementById('pic-type');
+  const factEl  = document.getElementById('pic-fact');
+  if (!card || !nameEl) return;
+
+  nameEl.textContent = displayName;
+  if (typeEl) typeEl.textContent = structure;
+  if (factEl) factEl.textContent = fact;
+  card.classList.add('v');
+}
+
+/** Hide the part-info overlay and clear any mesh highlight */
+function hidePartInfo() {
+  const card = document.getElementById('part-info-card');
+  if (card) card.classList.remove('v');
+  restoreHighlight();
+}
+
+/** Pointer/tap handler for tapping organ parts in the 3D view */
+function onPartPointerDown(event) {
+  if (!threeOrgan || !threeCamera || !threeRenderer) return;
+
+  const rect = threeRenderer.domElement.getBoundingClientRect();
+  threePointer.x = ((event.clientX - rect.left) / rect.width)  * 2 - 1;
+  threePointer.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
+
+  threeRaycaster.setFromCamera(threePointer, threeCamera);
+  const intersects = threeRaycaster.intersectObject(threeOrgan, true);
+
+  if (intersects.length > 0) {
+    const mesh = intersects[0].object;
+    if (mesh.isMesh) {
+      highlightMesh(mesh);
+      showPartInfo(mesh.name || '');
+      ROT.onInteract();
+      return;
+    }
+  }
+  // Tapped empty space — clear highlight/info
+  hidePartInfo();
+}
+
+
   const container = document.getElementById('c3d');
   const vwEl = document.getElementById('vw');
   let W = container.clientWidth  || vwEl?.clientWidth  || window.innerWidth;
@@ -2657,6 +2860,11 @@ function initThreeViewer() {
 
   // Pause ROT on user interaction
   threeControls.addEventListener('start', () => ROT.onInteract());
+
+  // ── Part tap-to-highlight ──
+  threeRaycaster = new THREE.Raycaster();
+  threePointer = new THREE.Vector2();
+  threeRenderer.domElement.addEventListener('pointerdown', onPartPointerDown);
 
   // Render loop
   function animate() {
@@ -2804,29 +3012,66 @@ const ANATOMY_SVG = (() => {
 
   /* ── BRAIN lateral view ──────────────────────────────────── */
   const brain = wrap(`
-    <!-- cerebrum -->
-    <ellipse cx="230" cy="175" rx="175" ry="135" fill="${bd}" fill-opacity="0.1" stroke="${bd}" stroke-width="2"/>
-    <!-- gyri suggestion -->
-    <path d="M100,160 Q140,130 180,160 Q220,130 260,160 Q300,130 340,160 Q380,130 400,160"
-          fill="none" stroke="${bd}" stroke-width="1.5" opacity="0.5"/>
-    <path d="M110,195 Q150,165 190,195 Q230,165 270,195 Q310,165 350,195"
-          fill="none" stroke="${bd}" stroke-width="1.5" opacity="0.5"/>
-    <!-- cerebellum -->
-    <ellipse cx="370" cy="275" rx="80" ry="60" fill="${teal}" fill-opacity="0.12" stroke="${teal}" stroke-width="1.5"/>
-    ${label(370,275,'Cerebellum',teal,11)}
-    <!-- brainstem -->
-    <rect x="300" y="280" width="50" height="65" rx="12"
-          fill="${gold}" fill-opacity="0.15" stroke="${gold}" stroke-width="1.5"/>
-    ${label(325,315,'Brain-\nstem',gold,10)}
-    <!-- labels -->
-    ${label(200,175,'Cerebrum',wht,13)}
-    ${label(200,200,'(Forebrain)',dim,10)}
+    <!-- cerebrum outline (sagittal silhouette) -->
+    <path d="M70,150 Q60,70 160,45 Q260,20 340,55 Q400,80 410,140
+             Q415,175 395,200 Q390,230 365,245 Q350,275 310,270
+             Q270,290 230,270 Q180,285 140,255 Q90,250 75,210
+             Q55,185 70,150 Z"
+          fill="${bd}" fill-opacity="0.08" stroke="${bd}" stroke-width="2"/>
+
+    <!-- frontal lobe -->
+    <ellipse cx="150" cy="120" rx="80" ry="60" fill="${red}" fill-opacity="0.10" stroke="${red}" stroke-width="1.2"/>
+    ${label(120,90,'Frontal Lobe',red,10)}
+
+    <!-- parietal lobe -->
+    <ellipse cx="280" cy="100" rx="75" ry="55" fill="${teal}" fill-opacity="0.10" stroke="${teal}" stroke-width="1.2"/>
+    ${label(290,75,'Parietal Lobe',teal,10)}
+
+    <!-- occipital lobe -->
+    <ellipse cx="380" cy="160" rx="55" ry="55" fill="${gold}" fill-opacity="0.10" stroke="${gold}" stroke-width="1.2"/>
+    ${label(385,155,'Occipital\nLobe',gold,9)}
+
+    <!-- temporal lobe -->
+    <ellipse cx="210" cy="225" rx="85" ry="40" fill="${blue}" fill-opacity="0.10" stroke="${blue}" stroke-width="1.2"/>
+    ${label(190,228,'Temporal Lobe',blue,10)}
+
+    <!-- gyri suggestion lines on frontal/parietal -->
+    <path d="M90,90 Q120,70 150,90 Q180,70 210,90 Q240,70 270,90"
+          fill="none" stroke="${bd}" stroke-width="1.2" opacity="0.4"/>
+    <path d="M100,115 Q130,95 160,115 Q190,95 220,115 Q250,95 280,115 Q310,95 335,115"
+          fill="none" stroke="${bd}" stroke-width="1.2" opacity="0.4"/>
+
+    <!-- corpus callosum -->
+    <path d="M120,130 Q220,95 320,135" fill="none" stroke="${wht}" stroke-width="3" stroke-linecap="round"/>
+    ${label(220,155,'Corpus Callosum',wht,9)}
+
+    <!-- thalamus -->
+    <ellipse cx="225" cy="160" rx="22" ry="18" fill="${red}" fill-opacity="0.25" stroke="${red}" stroke-width="1.2"/>
+    ${label(225,160,'Thal.',red,9)}
+
     <!-- hypothalamus -->
-    <circle cx="270" cy="245" r="18" fill="${red}" fill-opacity="0.2" stroke="${red}" stroke-width="1.2"/>
-    ${label(270,245,'Hypo-\nthalamus',red,9)}
-    ${note(250,358,'Cerebrum 85% · Cerebellum = balance · Brainstem = vital functions')}
-    ${note(250,371,'Hypothalamus = thermostat of body · NEET high yield')}
+    <circle cx="218" cy="195" r="12" fill="${gold}" fill-opacity="0.3" stroke="${gold}" stroke-width="1.2"/>
+    ${label(218,222,'Hypothalamus',gold,9)}
+
+    <!-- brainstem (midbrain/pons/medulla) -->
+    <path d="M235,195 Q245,230 250,265 Q252,290 245,310"
+          fill="none" stroke="${bd}" stroke-width="14" stroke-linecap="round" opacity="0.35"/>
+    ${label(290,260,'Brainstem',bd,10)}
+    ${note(290,275,'(Midbrain · Pons · Medulla)')}
+
+    <!-- cerebellum -->
+    <path d="M310,225 Q360,215 385,245 Q405,275 370,295 Q335,310 305,285 Q290,255 310,225 Z"
+          fill="${teal}" fill-opacity="0.14" stroke="${teal}" stroke-width="1.5"/>
+    ${label(345,260,'Cerebellum',teal,11)}
+
+    <!-- spinal cord stub -->
+    <line x1="248" y1="305" x2="252" y2="345" stroke="${dim}" stroke-width="6" stroke-linecap="round"/>
+    ${label(252,358,'Spinal Cord →',dim,9)}
+
+    ${note(220,355,'Cerebrum ~85% of mass · 4 lobes per hemisphere')}
+    ${note(220,371,'Brainstem = vital functions · Cerebellum = balance & coordination')}
   `);
+
 
   /* ── KIDNEY nephron schematic ────────────────────────────── */
   const kidney = wrap(`
@@ -5251,12 +5496,5 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
-
-<script 
-  src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>
-eruda.init();
-</script>
-
 </body>
 </html>
