@@ -5,9 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AnatomySphere — Free 3D Anatomy Viewer for NEET & Nursing</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js" defer></script>
+<script>
+window.onerror = function(msg, src, line, col, err){
+  console.error("GLOBAL ERROR:", msg, "at", src, line+":"+col, err);
+  alert("AnatomySphere Error:\n" + msg);
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js" async></script>
 <style>
 /* ─── TOKENS ─────────────────────────────────────────── */
 :root {
@@ -1666,7 +1672,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
       <div class="sl">Chapter</div>
       <div class="ctbs" id="ctbs">
         <button class="ctb on" data-cat="circulatory" onclick="pickCat('circulatory',this)">Circulatory</button>
-        <button class="ctb"    data-cat="nervous"   onclick="pickCat('nervous',this)">Nervous</button>
+        <button class="ctb"    data-cat="nervous"   onclick="pickCat('organic',this)">Nervous</button>
         <button class="ctb"    data-cat="excretory"  onclick="pickCat('excretory',this)">Excretory</button>
         <button class="ctb"    data-cat="digestive"    onclick="pickCat('digestive',this)">Digestive</button>
         <button class="ctb"    data-cat="respiratory" onclick="pickCat('respiratory',this)">Respiratory</button>
@@ -1683,11 +1689,12 @@ body.pmode #edu-bottom-sheet { display: none !important }
     <div class="ss" id="s3d">
       <div class="sl">3D Settings</div>
       <div class="cr">
-        <span class="cl">View Mode</span>
+        <span class="cl">Model Style</span>
         <select class="cs" id="sty" onchange="applyStyle()">
-          <option value="solid">Solid</option>
-          <option value="xray">X-Ray (transparent)</option>
-          <option value="wireframe">Wireframe</option>
+          <option value="stick">Stick</option>
+          <option value="sphere">Space Fill</option>
+          <option value="ssPyMol">PyMol</option>
+          <option value="rasmol">RasMol</option>
         </select>
       </div>
       <div class="cr">
@@ -1910,7 +1917,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <!-- Category filter pills -->
   <div class="pnd-cats" id="pnd-cats">
     <button class="pnd-cat on" data-cat="circulatory" onclick="pndSetCat('circulatory',this)">Circulatory</button>
-    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('nervous',this)">Nervous</button>
+    <button class="pnd-cat"    data-cat="nervous"   onclick="pndSetCat('organic',this)">Nervous</button>
     <button class="pnd-cat"    data-cat="excretory"  onclick="pndSetCat('excretory',this)">Excretory</button>
     <button class="pnd-cat"    data-cat="digestive"    onclick="pndSetCat('digestive',this)">Digestive</button>
     <button class="pnd-cat"    data-cat="respiratory" onclick="pndSetCat('respiratory',this)">Respiratory</button>
@@ -1942,7 +1949,7 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <!-- Categories -->
   <div class="ms-cats">
     <button class="ms-cat on" data-cat="circulatory" onclick="msCat('circulatory',this)">Circulatory</button>
-    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('nervous',this)">Nervous</button>
+    <button class="ms-cat"    data-cat="nervous"   onclick="msCat('organic',this)">Nervous</button>
     <button class="ms-cat"    data-cat="excretory"  onclick="msCat('excretory',this)">Excretory</button>
     <button class="ms-cat"    data-cat="digestive"    onclick="msCat('digestive',this)">Digestive</button>
     <button class="ms-cat"    data-cat="respiratory" onclick="msCat('respiratory',this)">Respiratory</button>
@@ -1956,11 +1963,14 @@ body.pmode #edu-bottom-sheet { display: none !important }
   <div class="ms-ctrls" id="ms-ctrls">
     <div class="ms-ctrl-label">3D Display</div>
     <div class="ms-ctrl-row">
-      <span class="ms-ctrl-lbl">View Mode</span>
+      <span class="ms-ctrl-lbl">Style</span>
       <select class="ms-sel" id="ms-sty" onchange="msSyncStyle()">
-        <option value="solid">Solid</option>
-        <option value="xray">X-Ray (transparent)</option>
-        <option value="wireframe">Wireframe</option>
+        <option value="stick">Stick</option>
+        <option value="sphere">Space Fill</option>
+      <select class="ms-sel" id="ms-col" onchange="msSyncColor()">
+        <option value="Jmol">CPK</option>
+        <option value="ssPyMol">PyMol</option>
+        <option value="rasmol">RasMol</option>
       </select>
     </div>
   </div>
@@ -2173,9 +2183,11 @@ function openMolScreen() {
   document.querySelectorAll('.ms-cat').forEach(b => {
     b.classList.toggle('on', b.dataset.cat === curCat);
   });
-  // Sync mobile view-mode select with desktop sidebar value
+  // Sync mobile style/color selects with desktop sidebar values
   const dSty = document.getElementById('sty');
+  const dCol = document.getElementById('col');
   if (dSty) document.getElementById('ms-sty').value = dSty.value;
+  if (dCol) document.getElementById('ms-col').value = dCol.value;
   // Update bottom tab
   document.getElementById('bmol').classList.add('on');
 }
@@ -2230,10 +2242,15 @@ function msSearch() {
   go(val, null);
 }
 
-/* Mobile view-mode sync — keep desktop sidebar in sync */
+/* Mobile style/color sync — keep desktop sidebar in sync */
 function msSyncStyle() {
   const val = document.getElementById('ms-sty').value;
   document.getElementById('sty').value = val;
+  applyStyle();
+}
+function msSyncColor() {
+  const val = document.getElementById('ms-col').value;
+  document.getElementById('col').value = val;
   applyStyle();
 }
 
@@ -2283,6 +2300,19 @@ function setMode(mode) {
   document.getElementById('ppr').classList.toggle('on', mode === 'props');
   document.getElementById('s3d').style.display  = is3d ? 'block' : 'none';
   document.getElementById('vc').style.display   = is3d ? 'flex'  : 'none';
+
+  if (is3d && threeRenderer && threeCamera) {
+    requestAnimationFrame(() => {
+      const vwEl = document.getElementById('vw');
+      if (!vwEl) return;
+      const W2 = vwEl.clientWidth, H2 = vwEl.clientHeight;
+      if (W2 > 10 && H2 > 10) {
+        threeCamera.aspect = W2 / H2;
+        threeCamera.updateProjectionMatrix();
+        threeRenderer.setSize(W2, H2);
+      }
+    });
+  }
 
   // 3D-only overlays
   ['edu-card','atom-legend','hint-bar','edu-highlight','bond-angle-svg','ba-reason'].forEach(id => {
@@ -2432,6 +2462,7 @@ function searchDB(query) {
 ════════════════════════════════════════ */
 async function do3D(meta, tk) {
   if (!meta || !meta.glb) throw new Error('No GLB URL for this organ');
+  console.log('[AnatomySphere 3D] loading GLB:', meta.glb);
 
   showLoad(true, meta.n, 'LOADING 3D MODEL…');
 
@@ -2456,14 +2487,27 @@ async function do3D(meta, tk) {
         if (tk !== token) return resolve();
         threeOrgan = gltf.scene;
 
+        let meshCount = 0;
+        threeOrgan.traverse(c => { if (c.isMesh) meshCount++; });
+        console.log('[AnatomySphere 3D] GLB loaded:', meta.glb, '| meshes:', meshCount);
+
         // Centre and scale the model
         const box    = new THREE.Box3().setFromObject(threeOrgan);
         const centre = box.getCenter(new THREE.Vector3());
         const size   = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
+        console.log('[AnatomySphere 3D] bbox size:', size, '| maxDim:', maxDim);
+
+        if (!isFinite(maxDim) || maxDim === 0) {
+          console.error('[AnatomySphere 3D] Invalid model bounding box — model has zero/invalid size');
+          reject(new Error('Model has invalid bounding box'));
+          return;
+        }
+
         const scale  = 2.5 / maxDim;
         threeOrgan.scale.setScalar(scale);
         threeOrgan.position.sub(centre.multiplyScalar(scale));
+        console.log('[AnatomySphere 3D] applied scale:', scale, '| position:', threeOrgan.position);
 
         // Apply organ-appropriate material enhancement
         threeOrgan.traverse(child => {
@@ -2476,16 +2520,32 @@ async function do3D(meta, tk) {
         });
 
         threeScene.add(threeOrgan);
-        applyStyle();
+        console.log('[AnatomySphere 3D] organ added to scene. Scene children:', threeScene.children.length);
 
         // Reset camera
         threeCamera.position.set(0, 0, 4);
         threeControls.reset();
         threeControls.update();
+        console.log('[AnatomySphere 3D] camera position:', threeCamera.position, '| aspect:', threeCamera.aspect);
+
+        // Force a resize in case the viewport panel only became visible just now
+        requestAnimationFrame(() => {
+          const vwEl = document.getElementById('vw');
+          if (vwEl) {
+            const W2 = vwEl.clientWidth, H2 = vwEl.clientHeight;
+            console.log('[AnatomySphere 3D] post-load resize check:', W2, H2);
+            if (W2 > 10 && H2 > 10) {
+              threeCamera.aspect = W2 / H2;
+              threeCamera.updateProjectionMatrix();
+              threeRenderer.setSize(W2, H2);
+            }
+          }
+        });
 
         // Start ROT loop
         ROT.paused = false;
         ROT.start();
+        console.log('[AnatomySphere 3D] render loop running:', threeAnimId !== null);
 
         resolve();
       },
@@ -2497,6 +2557,7 @@ async function do3D(meta, tk) {
       },
       (err) => {
         console.error('[AnatomySphere 3D] GLTFLoader error:', err);
+        showErr(`3D model failed to load: ${meta.n}. Check browser console. (${meta.glb})`);
         reject(new Error('GLB load failed'));
       }
     );
@@ -2518,8 +2579,12 @@ function waitForThree() {
 
 function initThreeViewer() {
   const container = document.getElementById('c3d');
-  const W = container.clientWidth  || window.innerWidth  - 300;
-  const H = container.clientHeight || window.innerHeight - 56;
+  const vwEl = document.getElementById('vw');
+  let W = container.clientWidth  || vwEl?.clientWidth  || window.innerWidth;
+  let H = container.clientHeight || vwEl?.clientHeight || (window.innerHeight - 56);
+  if (W < 10) W = window.innerWidth;
+  if (H < 10) H = window.innerHeight - 56;
+  console.log('[AnatomySphere 3D] init viewer size', W, H);
 
   // Scene
   threeScene = new THREE.Scene();
@@ -2627,29 +2692,8 @@ const ROT = {
   attachListeners() { /* handled by OrbitControls */ },
 };
 
-/* Apply the selected View Mode (solid / x-ray / wireframe) to the current organ */
-function applyStyle() {
-  if (!threeOrgan) return;
-  const mode = document.getElementById('sty').value;
-  threeOrgan.traverse(child => {
-    if (child.isMesh && child.material) {
-      const mats = Array.isArray(child.material) ? child.material : [child.material];
-      mats.forEach(mat => {
-        mat.wireframe = (mode === 'wireframe');
-        if (mode === 'xray') {
-          mat.transparent = true;
-          mat.opacity = 0.35;
-          mat.depthWrite = false;
-        } else {
-          mat.transparent = false;
-          mat.opacity = 1;
-          mat.depthWrite = true;
-        }
-        mat.needsUpdate = true;
-      });
-    }
-  });
-}
+/* Stub out old 3Dmol functions so existing callers don't throw */
+function applyStyle()      { /* Three.js — style via material properties */ }
 function applyIonicStyle() { /* not applicable to anatomy organs */ }
 function togRot() {
   rotating = document.getElementById('rot').checked;
@@ -3168,6 +3212,108 @@ function fillInfo(m) {
     }
     if (typeof pmodeOn !== 'undefined' && pmodeOn) updatePmodePanelEnhanced(m, key);
   }, OVERLAY_DELAY);
+}
+
+/* ════════════════════════════════════════
+   3D STYLE & ROTATION
+════════════════════════════════════════ */
+function applyStyle() {
+  if (!viewer || !model) return;
+  const s = document.getElementById('sty').value;
+  const c = document.getElementById('col').value;
+  if (s === 'sphere') {
+    model.setStyle({}, {
+      sphere: { scale: 0.26, colorscheme: c },
+      stick:  { radius: 0.10, colorscheme: c }
+    });
+  } else if (s === 'line') {
+    model.setStyle({}, { line: { colorscheme: c } });
+  } else {
+    model.setStyle({}, { stick: { radius: 0.18, colorscheme: c } });
+  }
+  viewer.render();
+}
+
+/* ── Ionic 3D style ─────────────────────────────────────────────────────
+   For ionic compounds: render ALL atoms as large spheres with explicit
+   element colours so single-atom ions (Na⁺, K⁺, Ca²⁺, Cl⁻ etc.) are
+   clearly visible against the dark background.
+   Uses 3Dmol's per-element colour overrides.
+─────────────────────────────────────────────────────────────────────────── */
+function applyIonicStyle() {
+  if (!viewer || !model) return;
+
+  // Explicit bright colours for ions commonly invisible with default schemes
+  const ionColours = {
+    Na: 0xaaaaff,   // soft purple — alkali
+    K:  0xcc88ff,   // violet
+    Li: 0xcc4444,   // red-pink
+    Ca: 0x44cc88,   // green — alkaline earth
+    Mg: 0x22bb77,
+    Ba: 0x44aaff,
+    Fe: 0xff8844,   // orange
+    Cu: 0x44ccff,   // cyan
+    Zn: 0x88ccaa,
+    Al: 0xaaaacc,
+    // Anion-formers keep standard CPK
+    O:  0xff4444,
+    N:  0x4488ff,
+    Cl: 0x00e5b4,
+    F:  0x00e5b4,
+    S:  0xffdd00,
+    P:  0xff9900,
+    C:  0xddddff,
+    H:  0xffffff,
+  };
+
+  // Base style: large spheres for all atoms (makes single-atom ions visible)
+  model.setStyle({}, {
+    sphere: { scale: 0.55, colorscheme: 'Jmol' }
+  });
+
+  // Override colours per element with our bright palette
+  Object.entries(ionColours).forEach(([elem, color]) => {
+    model.setStyle({ elem }, {
+      sphere: { scale: 0.55, color }
+    });
+  });
+
+  // Covalent bonds within a fragment (e.g. O-H in OH⁻) — thin stick
+  model.setStyle({}, {
+    sphere: { scale: 0.55 },  // keep sphere
+    stick:  { radius: 0.12, colorscheme: 'Jmol' }
+  });
+
+  // Re-apply element colours on top of stick (stick doesn't erase sphere in 3Dmol)
+  Object.entries(ionColours).forEach(([elem, color]) => {
+    model.setStyle({ elem }, {
+      sphere: { scale: 0.55, color },
+      stick:  { radius: 0.12, color }
+    });
+  });
+
+  viewer.render();
+}
+function togRot() {
+  rotating = document.getElementById('rot').checked;
+  if (!viewer) return;
+  if (rotating) {
+    ROT.paused = false;
+    ROT.start();
+  } else {
+    ROT.stop();
+  }
+}
+function resetV() {
+  if (!viewer) return;
+  ROT.onInteract(); // brief pause so user can see the reset orientation
+  viewer.zoomTo();
+  viewer.render();
+}
+function zoomV(f) {
+  if (!viewer) return;
+  ROT.onInteract();
+  viewer.zoom(f, 500);
 }
 
 /* ════════════════════════════════════════
@@ -4341,7 +4487,7 @@ window.csGetFallbackInfo = csGetFallbackInfo;
       <div class="hub-filter" id="hub-filter">
         <button class="filt-btn on" data-cat="all"       onclick="qzPickFilt('all',this)">All Topics</button>
         <button class="filt-btn"    data-cat="circulatory" onclick="qzPickFilt('circulatory',this)">Circulatory</button>
-        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('nervous',this)">Nervous</button>
+        <button class="filt-btn"    data-cat="nervous"   onclick="qzPickFilt('organic',this)">Nervous</button>
         <button class="filt-btn"    data-cat="excretory"  onclick="qzPickFilt('excretory',this)">Excretory</button>
         <button class="filt-btn"    data-cat="digestive"    onclick="qzPickFilt('digestive',this)">Digestive</button>
         <button class="filt-btn"    data-cat="respiratory" onclick="qzPickFilt('respiratory',this)">Respiratory</button>
