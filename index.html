@@ -267,6 +267,12 @@ header{
 }
 .sd-err span{color:var(--acc);display:block;font-size:22px;margin-bottom:8px}
 
+/* Credit/attribution caption under 2D diagram images */
+.sd-credit{
+  font-family:var(--fn);font-size:9px;color:var(--di);
+  text-align:center;padding:6px 4px 2px;letter-spacing:.5px;
+}
+
 /* Properties panel — bigger text, bigger cards */
 #ppr{display:none;position:absolute;inset:0;flex-direction:column;gap:14px;overflow-y:auto;padding:24px 20px}
 #ppr.on{display:flex}
@@ -2812,6 +2818,7 @@ function onPartPointerDown(event) {
   hidePartInfo();
 }
 
+
 function initThreeViewer() {
   const container = document.getElementById('c3d');
   const vwEl = document.getElementById('vw');
@@ -2959,6 +2966,26 @@ function zoomV(f) {
    Each organ has a hand-crafted schematic SVG
    in the same dark-palette style as ChemSphere.
 ════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   2D ANATOMY DIAGRAMS — real labeled images
+   Hosted in repo root alongside the .glb files.
+   Falls back to ANATOMY_SVG (inline) if not listed here.
+════════════════════════════════════════ */
+const ANATOMY_IMG = {
+  'circ-heart':           { src: '2d-heart.webp',            credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'circ-spleen':          { src: '2d-accessory-organs.webp', credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'nerv-brain':           { src: '2d-cerebrum.webp',         credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'nerv-spinal':          { src: '2d-spinalcord.jpg',        credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'resp-lungs':           { src: '2d-lungs.jpeg',            credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'dige-liver':           { src: '2d-accessory-organs.webp', credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'dige-pancreas':        { src: '2d-accessory-organs.webp', credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'dige-large-intestine': { src: '2d-largeintestine.webp',   credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'dige-small-intestine': { src: '2d-smallintestine.webp',   credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'excr-kidney-left':     { src: '2d-kidney.webp',           credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'excr-kidney-right':    { src: '2d-kidney.webp',           credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+  'excr-bladder':         { src: '2d-urinarybladder.webp',   credit: 'OpenStax Anatomy & Physiology, CC BY 4.0' },
+};
+
 const ANATOMY_SVG = (() => {
   const bg   = 'transparent';
   const bd   = '#4a8fff';   // border / structure lines
@@ -3382,8 +3409,63 @@ async function load2D(meta) {
   _sdInitZoomButtons();
 
   const key = meta ? (meta.key || meta._key) : null;
+  const img = key ? ANATOMY_IMG[key] : null;
   const svg = key ? ANATOMY_SVG[key] : null;
 
+  if (img) {
+    const wrapDiv = document.createElement('div');
+    wrapDiv.id        = 'sd-wrap';
+    wrapDiv.className = 'sd-static';
+    wrapDiv.style.cssText = 'width:100%;padding:8px;box-sizing:border-box;transform-origin:center top';
+
+    const imageEl = document.createElement('img');
+    imageEl.src = img.src;
+    imageEl.alt = `${meta.n} — labeled anatomy diagram`;
+    imageEl.style.cssText = 'width:100%;height:auto;display:block;border-radius:10px;background:#fff';
+    imageEl.onerror = () => {
+      // Image failed to load (e.g. file not uploaded yet) — fall back to SVG/placeholder
+      wrapDiv.remove();
+      loadFallback2D(meta, key, frame, sp, lbl);
+    };
+
+    const creditEl = document.createElement('div');
+    creditEl.className = 'sd-credit';
+    creditEl.textContent = img.credit;
+
+    wrapDiv.appendChild(imageEl);
+    wrapDiv.appendChild(creditEl);
+    frame.insertBefore(wrapDiv, frame.firstChild);
+    frame.classList.add('rdy');
+    sp.style.display = 'none';
+    lbl.textContent  = `${meta.n} · Anatomy Diagram`;
+    _sdApplyZoom();
+    _sdInitPinch();
+  } else if (svg) {
+    const wrapDiv = document.createElement('div');
+    wrapDiv.id        = 'sd-wrap';
+    wrapDiv.className = 'sd-static';
+    wrapDiv.style.cssText = 'width:100%;padding:8px;box-sizing:border-box;transform-origin:center top';
+    wrapDiv.innerHTML = svg;
+    frame.insertBefore(wrapDiv, frame.firstChild);
+    frame.classList.add('rdy');
+    sp.style.display = 'none';
+    lbl.textContent  = `${meta.n} · Anatomy Diagram`;
+    _sdApplyZoom();
+    _sdInitPinch();
+  } else {
+    sp.style.display = 'none';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'sd-err';
+    errDiv.innerHTML = `<span>⬡</span>Diagram for <strong>${meta ? meta.n : 'this organ'}</strong> coming soon.<br>Use the 3D viewer to explore.`;
+    frame.appendChild(errDiv);
+    frame.classList.add('rdy');
+    lbl.textContent = 'Diagram coming soon';
+  }
+}
+
+/** Fallback path used if the image in ANATOMY_IMG fails to load (e.g. file not yet uploaded) */
+function loadFallback2D(meta, key, frame, sp, lbl) {
+  const svg = key ? ANATOMY_SVG[key] : null;
   if (svg) {
     const wrapDiv = document.createElement('div');
     wrapDiv.id        = 'sd-wrap';
